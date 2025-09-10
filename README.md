@@ -39,5 +39,3 @@ poetry run python extract.py
 ```
 
 ---
-
-Esses passos garantem que todas as dependências serão instaladas e o ambiente estará pronto para uso, mesmo para quem nunca usou Poetry antes.
