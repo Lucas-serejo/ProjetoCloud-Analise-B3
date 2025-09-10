@@ -1,5 +1,5 @@
 from datetime import datetime
-from backend.helpers import yymmdd
+from helpers import yymmdd
 import requests
 import os
 import zipfile
