@@ -14,19 +14,29 @@ pip install poetry
 ```
 > Após instalar, feche e reabra o terminal para garantir que o comando `poetry` funcione.
 
-## 2. Entre na pasta do backend
+## 2. Configure o Poetry para criar o ambiente virtual local
+
+> Antes de instalar as dependências, execute:
+>
+> ```powershell
+> poetry config virtualenvs.in-project true
+> ```
+>
+> Isso garante que o ambiente virtual será criado na pasta do projeto (`.venv`).
+
+## 3. Entre na pasta do backend
 
 ```powershell
 cd backend
 ```
 
-## 3. Instale as dependências e crie o ambiente virtual
+## 4. Instale as dependências e crie o ambiente virtual
 
 ```powershell
 poetry install
 ```
 
-## 4. Ative o ambiente virtual
+## 5. Ative o ambiente virtual
 
 No PowerShell:
 ```powershell
@@ -39,3 +49,5 @@ poetry run python extract.py
 ```
 
 ---
+
+Esses passos garantem que todas as dependências serão instaladas e o ambiente estará pronto para uso, mesmo para quem nunca usou Poetry antes.
