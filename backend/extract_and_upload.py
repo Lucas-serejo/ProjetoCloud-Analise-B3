@@ -11,8 +11,8 @@ from azure.core.exceptions import ResourceExistsError
 PATH_TO_SAVE = Path(os.getenv("PATH_TO_SAVE", "./dados_b3")).resolve()
 AZURE_BLOB_CONNECTION = os.getenv(
     "AZURE_STORAGE_CONNECTION_STRING",
-    "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://localhost:10000/devstoreaccount1;"
-)
+    "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;"
+) 
 CONTAINER = os.getenv("AZURE_BLOB_CONTAINER", "dados-pregao")
 
 def build_url_download(date_to_download: str) -> str:
@@ -54,7 +54,7 @@ def upload_directory_to_blob(container_client, directory_path: Path, blob_prefix
         for file in files:
             local_path = Path(root) / file
             relative_path = local_path.relative_to(directory_path)
-            blob_name = f"{blob_prefix}{relative_path}".as_posix()
+            blob_name = f"{blob_prefix}{relative_path.as_posix()}"
             save_file_to_blob(container_client, blob_name, local_path)
             files_uploaded += 1
     return files_uploaded
