@@ -1,17 +1,25 @@
 services:
-  extractor:
+  etl:
     build:
       context: ./backend
-    command: python extract_and_upload.py
+    command: sh -c "alembic upgrade head && python run_pipeline.py"
     working_dir: /app
     depends_on:
       - azurite
+      - postgres
     volumes:
       - ./backend/dados_b3:/app/dados_b3
     environment:
       - PATH_TO_SAVE=/app/dados_b3
       - AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;
       - AZURE_BLOB_CONTAINER=dados-pregao
+      - UPLOAD_TO_BLOB=true
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=b3_data
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+    restart: on-failure
 
   azurite:
     image: mcr.microsoft.com/azure-storage/azurite
@@ -34,23 +42,6 @@ services:
     volumes:
       - postgres_data_volume:/var/lib/postgresql/data
 
-  transformer:
-    build:
-      context: ./backend
-    command: sh -c "alembic upgrade head && python transform_and_save.py"
-    working_dir: /app
-    depends_on:
-      - azurite
-      - postgres
-    environment:
-      - AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;
-      - AZURE_BLOB_CONTAINER=dados-pregao
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=b3_data
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=password
-
   pgadmin:
     image: dpage/pgadmin4
     environment:
@@ -60,6 +51,7 @@ services:
       - "5050:80"
     depends_on:
       - postgres
+
 volumes:
   postgres_data_volume:
   azurite_data_volume:
