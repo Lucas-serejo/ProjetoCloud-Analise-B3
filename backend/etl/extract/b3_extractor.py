@@ -13,7 +13,7 @@ class B3Extractor:
     
     def build_url(self, date_str):
         """Constrói a URL para download do arquivo da B3."""
-        return f"https://www.b3.com.br/pesquisapregao/download?filelist=PR{date_str}.zip"
+        return f"https://www.b3.com.br/pesquisapregao/download?filelist=SPRE{date_str}.zip"
     
     def download_zip(self, date_str=None):
         """Baixa o arquivo ZIP da B3 para a data especificada ou atual."""
@@ -51,11 +51,11 @@ class B3Extractor:
         print(f"[OK] Primeira extração concluída em {extract_dir_1}")
         
         # Extrair segunda camada
-        inner_zip_path = extract_dir_1 / f"PR{date_str}.zip"
+        inner_zip_path = extract_dir_1 / f"SPRE{date_str}.zip"
         if not inner_zip_path.exists():
             raise FileNotFoundError(f"Inner zip não encontrado: {inner_zip_path}")
-            
-        extract_dir_2 = self.data_dir / f"PR{date_str}"
+
+        extract_dir_2 = self.data_dir / f"SPRE{date_str}"
         extract_dir_2.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(inner_zip_path, "r") as zf:
             zf.extractall(extract_dir_2)
