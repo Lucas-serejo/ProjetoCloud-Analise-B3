@@ -1,53 +1,163 @@
 # ProjetoCloud-Analise-B3
 
-# Como rodar o projeto (backend)
+Pipeline Cloud para Análise de Cotações da B3 com Azure - **Versão Local com Docker e PostgreSQL**
 
-## 1. Instale o Poetry (caso não tenha)
+## 🚀 Como executar o pipeline completo
 
-No PowerShell:
+### Pré-requisitos
+- Docker Desktop instalado e rodando
+- Python 3.12+ (para desenvolvimento local)
+- Poetry (para gerenciamento de dependências)
+
+### 1. Executar o pipeline completo com Docker
+
+Na raiz do projeto:
+
 ```powershell
-(Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | python -
+# Subir todos os serviços (Azurite + PostgreSQL + Pipeline)
+docker compose up --build
+
+# Ou subir apenas os serviços de infraestrutura primeiro (recomendado)
+docker compose up -d azurite postgres
+
+# Depois executar o pipeline
+docker compose up extractor transformer
 ```
-Ou, se preferir, via pip:
+
+### 2. Testar os serviços individualmente
+
 ```powershell
-pip install poetry
+# Apenas o emulador do Azure Storage (Azurite)
+docker compose up -d azurite
+
+# Apenas o banco de dados PostgreSQL
+docker compose up -d postgres
+
+# Apenas a extração e upload para blob
+docker compose up extractor
+
+# Apenas a transformação e carga no banco
+docker compose up transformer
 ```
-> Após instalar, feche e reabra o terminal para garantir que o comando `poetry` funcione.
 
-## 2. Configure o Poetry para criar o ambiente virtual local
+### 3. Verificar o funcionamento
 
-> Antes de instalar as dependências, execute:
->
-> ```powershell
-> poetry config virtualenvs.in-project true
-> ```
->
-> Isso garante que o ambiente virtual será criado na pasta do projeto (`.venv`).
+Execute o script de teste:
 
-## 3. Entre na pasta do backend
+```powershell
+# Via Docker (após os serviços estarem rodando)
+docker compose exec extractor python test_pipeline.py
+
+# Ou localmente (após instalar dependências)
+cd backend
+poetry install
+poetry run python test_pipeline.py
+```
+
+## 🏗️ Arquitetura do Pipeline
+
+```
+📥 B3 (Download) → 📦 Docker Container (Extrair) 
+                     ↓
+📁 Azure Blob Storage (Azurite) → 🔄 Docker Container (Transformar)
+                                     ↓
+🗄️ PostgreSQL → 📊 Dados estruturados
+```
+
+### Componentes:
+
+1. **Extractor Service** (`extract_and_upload.py`)
+   - Baixa arquivos ZIP da B3
+   - Extrai arquivos XML
+   - Faz upload para o Blob Storage (Azurite)
+
+2. **Transformer Service** (`transform_and_save.py`)
+   - Baixa XMLs do Blob Storage
+   - Extrai dados de cotações usando XML parsing
+   - Salva dados estruturados no PostgreSQL
+
+3. **Azurite** (Emulador Azure Storage)
+   - Porta 10000: Blob Storage
+   - Porta 10001: Queue Storage
+   - Porta 10002: Table Storage
+
+4. **PostgreSQL**
+   - Porta 5432: Conexão padrão do PostgreSQL
+
+## 📂 Estrutura dos dados
+
+### No Blob Storage:
+```
+dados-pregao/
+├── raw/
+│   └── pregao_YYMMDD.zip
+└── xml/
+    └── YYMMDD/
+        ├── arquivo1.xml
+        └── arquivo2.xml
+```
+
+### No PostgreSQL (Tabela `cotacoes`):
+```sql
+CREATE TABLE cotacoes (
+    id SERIAL PRIMARY KEY,
+    ativo VARCHAR(20) NOT NULL,
+    data_pregao DATE NOT NULL,
+    abertura NUMERIC(18, 5),
+    fechamento NUMERIC(18, 5),
+    maximo NUMERIC(18, 5),
+    minimo NUMERIC(18, 5),
+    volume BIGINT,
+    timestamp_processamento TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (ativo, data_pregao)
+);
+```
+
+## 🔧 Desenvolvimento Local
+
+### Instalar dependências com Poetry:
 
 ```powershell
 cd backend
-```
-
-## 4. Instale as dependências e crie o ambiente virtual
-
-```powershell
 poetry install
 ```
 
-## 5. Ative o ambiente virtual
+### Executar scripts individualmente:
 
-No PowerShell:
 ```powershell
-.venv\Scripts\Activate.ps1
+# Extrair e fazer upload
+poetry run python extract_and_upload.py
+
+# Transformar e salvar no banco
+poetry run python transform_and_save.py
+
+# Teste completo
+poetry run python test_pipeline.py
 ```
 
-Ou rode scripts diretamente (sem ativar):
+## 🐳 Comandos Docker úteis
+
 ```powershell
-poetry run python extract.py
+# Ver logs dos serviços
+docker compose logs -f extractor
+docker compose logs -f transformer
+docker compose logs -f postgres
+
+# Acessar o banco de dados PostgreSQL
+docker compose exec postgres psql -U admin -d b3_db
+
+# Parar e remover todos os containers
+docker compose down -v
 ```
 
----
+## 🌐 Acessar interfaces web
 
-Esses passos garantem que todas as dependências serão instaladas e o ambiente estará pronto para uso, mesmo para quem nunca usou Poetry antes.
+- **Azurite**: Use Azure Storage Explorer ou VS Code extension
+- **PostgreSQL**: Acesse via cliente PostgreSQL na porta 5432
+
+## 🎯 Próximos passos
+
+- [ ] Adicionar Azure Data Factory local
+- [ ] Implementar Azure Functions
+- [ ] Adicionar Power BI dashboards
+- [ ] Deploy na Azure (produção)
