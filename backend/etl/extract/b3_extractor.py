@@ -122,4 +122,5 @@ class B3Extractor:
         return result
 
 if __name__ == "__main__":
-    run()
+    extractor = B3Extractor()
+    extractor.run() 
