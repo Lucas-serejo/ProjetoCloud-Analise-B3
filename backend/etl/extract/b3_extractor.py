@@ -96,31 +96,30 @@ class B3Extractor:
         return result
 
 # Script de execução
-def run():
-    extractor = B3Extractor()
-    result = extractor.execute()
-    
-    # Opcional: fazer upload para o blob
-    if os.getenv("UPLOAD_TO_BLOB", "true").lower() == "true":
-        from etl.common.storage import get_container_client, upload_blob
+    def run(self):
+        extractor = B3Extractor()
+        result = extractor.execute()
         
-        print("[INFO] Iniciando upload para o Blob Storage...")
-        container = get_container_client()
+        if os.getenv("UPLOAD_TO_BLOB", "true").lower() == "true":
+            from etl.common.storage import get_container_client, upload_blob
+            
+            print("[INFO] Iniciando upload para o Blob Storage...")
+            container = get_container_client()
+            
+            # Upload dos XMLs
+            xml_dir = result["xml_dir"]
+            date_str = result["date"]
+            uploaded = 0
+            
+            for xml_file in result["xml_files"]:
+                relative_path = xml_file.relative_to(xml_dir)
+                blob_name = f"xml/{date_str}/{relative_path}"
+                if upload_blob(container, blob_name, xml_file):
+                    uploaded += 1
+            
+            print(f"[OK] {uploaded} arquivos XML enviados para o blob storage")
         
-        # Upload dos XMLs
-        xml_dir = result["xml_dir"]
-        date_str = result["date"]
-        uploaded = 0
-        
-        for xml_file in result["xml_files"]:
-            relative_path = xml_file.relative_to(xml_dir)
-            blob_name = f"xml/{date_str}/{relative_path}"
-            if upload_blob(container, blob_name, xml_file):
-                uploaded += 1
-        
-        print(f"[OK] {uploaded} arquivos XML enviados para o blob storage")
-    
-    return result
+        return result
 
 if __name__ == "__main__":
     run()

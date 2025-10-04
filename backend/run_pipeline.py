@@ -12,7 +12,7 @@ def run_pipeline():
     # Fase 1: Extração
     print("\n--- FASE 1: EXTRAÇÃO ---")
     extractor = B3Extractor()
-    extraction_result = extractor.execute()
+    extraction_result = extractor.run()
     print(f"Extração concluída! {len(extraction_result['xml_files'])} arquivos XML extraídos.")
     
     # Fase 2: Transformação
