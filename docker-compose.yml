@@ -51,7 +51,10 @@ services:
       - "5050:80"
     depends_on:
       - postgres
+    volumes:
+      - pgadmin_data_volume:/var/lib/pgadmin
 
 volumes:
   postgres_data_volume:
   azurite_data_volume:
+  pgadmin_data_volume:
