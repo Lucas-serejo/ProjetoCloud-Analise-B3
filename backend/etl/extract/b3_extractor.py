@@ -7,6 +7,15 @@ from etl.common.helpers import yymmdd
 from etl.common.config import Config
 from etl.common.storage import get_container_client, upload_blob
 
+# Gera datas em ordem decrescente, apenas dias úteis (seg-sex)
+def iter_uteis_ate(max_days: int = 10, base: datetime | None = None):
+    if base is None:
+        base = datetime.now()
+    for i in range(max_days):
+        dt = base - timedelta(days=i)
+        if dt.weekday() < 5:
+            yield dt
+
 class B3Extractor:
     def __init__(self):
         self.data_dir = Config.DATA_DIR
@@ -22,10 +31,15 @@ class B3Extractor:
         
         url = self.build_url(date_str)
         session = requests.Session()
+        # Define um User-Agent para evitar bloqueios eventuais
+        session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0 Safari/537.36"
+        })
         
         try:
             print(f"[INFO] Tentando {url}")
             resp = session.get(url, timeout=30)
+            # Confirma que é um ZIP válido: começa com assinatura PK
             if resp.ok and resp.content and len(resp.content) > 200 and resp.content[:2] == b"PK":
                 return resp.content, date_str
         except requests.RequestException:
@@ -75,17 +89,22 @@ class B3Extractor:
     
     def execute(self):
         """Executa o processo de extração completo."""
-        # Tenta baixar para hoje
-        zip_bytes, date_str = self.download_zip()
+        # Percorre últimos dias úteis até encontrar um arquivo disponível
+        zip_bytes = None
+        date_str = None
+        for dt in iter_uteis_ate(max_days=10):
+            ds = yymmdd(dt)
+            content, ok_date = self.download_zip(ds)
+            if content:
+                zip_bytes = content
+                date_str = ok_date
+                break
+            else:
+                # Log auxiliar para troubleshooting quando pular para o próximo dia útil
+                print(f"[WARNING] Arquivo indisponível para {ds}, tentando dia útil anterior...")
         
-        # Se falhar, tenta para ontem
         if not zip_bytes:
-            yesterday = yymmdd(datetime.now() - timedelta(days=1))
-            print(f"[WARNING] Não foi possível baixar arquivo do dia atual, tentando para {yesterday}...")
-            zip_bytes, date_str = self.download_zip(yesterday)
-        
-        if not zip_bytes:
-            raise RuntimeError("Não foi possível baixar o arquivo de cotações para hoje ou ontem")
+            raise RuntimeError("Não foi possível baixar o arquivo de cotações nos últimos dias úteis verificados")
         
         print(f"[OK] Baixado arquivo de cotações para {date_str}")
         

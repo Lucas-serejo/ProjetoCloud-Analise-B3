@@ -1,7 +1,8 @@
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import datetime, timedelta
 from etl.common.storage import get_container_client, download_blob_to_string, list_blobs
 from etl.common.config import Config
+from etl.common.helpers import yymmdd
 
 class B3XMLParser:
     def __init__(self):
@@ -101,29 +102,32 @@ class B3XMLParser:
             return []
     
     def execute(self, date_str=None):
-        """Executa o processo de transformação para uma data específica."""
-        from datetime import datetime, timedelta
-        from etl.common.helpers import yymmdd
         
-        # Se não forneceu data, usa hoje
+        # Se não forneceu data, retrocede últimos dias úteis
         if not date_str:
-            date_str = yymmdd(datetime.now())
+            selected_date = None
+            xml_files = []
+            for i in range(0, 10):
+                dt = datetime.now() - timedelta(days=i)
+                if dt.weekday() >= 5:  # pula sábado e domingo
+                    continue
+                candidate = yymmdd(dt)
+                files = self.list_xml_files(candidate)
+                if files:
+                    selected_date = candidate
+                    xml_files = files
+                    break
+            if not xml_files:
+                print("[ERROR] Nenhum arquivo XML encontrado nos últimos dias úteis. Saindo.")
+                return []
+            date_str = selected_date
+        else:
+            xml_files = self.list_xml_files(date_str)
+            if not xml_files:
+                print(f"[INFO] Nenhum arquivo XML encontrado para {date_str}. Saindo.")
+                return []
         
-        # Lista os arquivos XML disponíveis
-        xml_files = self.list_xml_files(date_str)
         print(f"[INFO] Encontrados {len(xml_files)} arquivos XML com prefixo 'xml/{date_str}/'")
-        
-        # Se não encontrou para hoje, tenta ontem
-        if not xml_files:
-            yesterday = yymmdd(datetime.now() - timedelta(days=1))
-            print(f"[INFO] Nenhum arquivo XML encontrado para hoje. Tentando para ontem ({yesterday})...")
-            xml_files = self.list_xml_files(yesterday)
-            print(f"[INFO] Encontrados {len(xml_files)} arquivos XML com prefixo 'xml/{yesterday}/'")
-            date_str = yesterday
-        
-        if not xml_files:
-            print("[ERROR] Nenhum arquivo XML encontrado para hoje ou ontem. Saindo.")
-            return []
         
         all_cotacoes = []
         
