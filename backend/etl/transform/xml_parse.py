@@ -1,151 +1,153 @@
-import xml.etree.ElementTree as ET
-from datetime import datetime
+from lxml import etree as ET
+from datetime import datetime, timedelta
 from etl.common.storage import get_container_client, download_blob_to_string, list_blobs
 from etl.common.config import Config
+from etl.common.helpers import yymmdd
+import re
 
 class B3XMLParser:
     def __init__(self):
         self.container_client = get_container_client()
-    
+
     def list_xml_files(self, date_str):
-        """Lista os arquivos XML disponíveis para uma data."""
         prefix = f"xml/{date_str}/"
         blobs = list_blobs(self.container_client, name_starts_with=prefix)
         return [b.name for b in blobs]
-    
+
     def download_xml(self, blob_name):
-        """Baixa o conteúdo de um arquivo XML do blob storage."""
         content = download_blob_to_string(self.container_client, blob_name)
         return content
-    
+
     def parse_xml(self, xml_content):
-        """Extrai dados de cotações dos arquivos XML da B3."""
         try:
-            root = ET.fromstring(xml_content)
-            
-            # Tenta diferentes namespaces/caminhos para encontrar os dados
-            # Versão 1: Sem namespace
-            data_element = root.find('.//TradgDt/Dt')
-            if data_element is None:
-                # Versão 2: Com namespace explícito
-                namespace = {'bvmf': 'urn:bvmf.052.01.xsd'}
-                data_element = root.find('.//bvmf:TradgDt/bvmf:Dt', namespace)
-            
-            if data_element is None:
-                print("[WARNING] Não foi possível encontrar a data do pregão no XML.")
-                # Usar data fixa para desenvolvimento
-                data_pregao = datetime.now().date()
-                print(f"[INFO] Usando data atual como fallback: {data_pregao}")
+            data = xml_content.encode("utf-8") if isinstance(xml_content, str) else xml_content
+            root = ET.fromstring(data)
+
+            namespaces = {
+                'bvmf217': 'urn:bvmf.217.01.xsd',
+                'bvmf052': 'urn:bvmf.052.01.xsd',
+                'head': 'urn:iso:std:iso:20022:tech:xsd:head.001.001.01'
+            }
+
+            print(f"[DEBUG] Root tag: {root.tag}")
+
+            data_s = root.xpath("string(.//bvmf217:TradDt/bvmf217:Dt)", namespaces=namespaces)
+            if data_s:
+                data_pregao = datetime.strptime(data_s, "%Y-%m-%d").date()
+                print(f"[DEBUG] Data pregão encontrada: {data_pregao}")
             else:
-                data_pregao_str = data_element.text
-                data_pregao = datetime.strptime(data_pregao_str, '%Y-%m-%d').date()
-            
+                data_pregao = datetime.now().date()
+                print(f"[DEBUG] Data pregão não encontrada, usando data atual: {data_pregao}")
+
+            price_reports = root.xpath(".//bvmf217:PricRpt", namespaces=namespaces)
+            print(f"[DEBUG] Encontrados {len(price_reports)} relatórios de preço")
+
             cotacoes = []
-            
-            # Tenta encontrar instrumentos em diferentes caminhos
-            instrumentos = []
-            # Tentativa 1
-            instrumentos = root.findall('.//Instmt')
-            if not instrumentos:
-                # Tentativa 2
-                instrumentos = root.findall('.//PricRpt/*/Instmt')
-            if not instrumentos:
-                # Tentativa 3 com namespace
-                namespace = {'bvmf': 'urn:bvmf.052.01.xsd'}
-                instrumentos = root.findall('.//bvmf:Instmt', namespace)
-            
-            print(f"[DEBUG] Encontrados {len(instrumentos)} instrumentos")
-            
-            # Itera sobre os instrumentos (ações)
-            for instmt in instrumentos:
+            for i, report in enumerate(price_reports):
                 try:
-                    # Tenta diferentes tags para o ticker do ativo
-                    ticker_element = instmt.find('TckrSymb')
-                    if ticker_element is None:
-                        ticker_element = instmt.find('Symb')
-                    
-                    if ticker_element is None:
-                        print("[WARNING] Não foi possível encontrar o ticker do ativo")
+                    print(f"[DEBUG] Processando relatório {i+1}")
+
+                    ticker_node = report.xpath(".//*[local-name()='TckrSymb']")
+                    if not ticker_node or not ticker_node[0].text:
                         continue
-                        
-                    ativo = ticker_element.text
-                    
-                    # Procura os elementos de preço
-                    open_element = instmt.find('OpnPx')
-                    close_element = instmt.find('ClsPx')
-                    high_element = instmt.find('HghstPx')
-                    low_element = instmt.find('LwstPx')
-                    vol_element = instmt.find('FinInstrmQty')
-                    
-                    if all([open_element, close_element, high_element, low_element, vol_element]):
-                        cotacao = {
-                            'ativo': ativo,
-                            'data_pregao': data_pregao,
-                            'abertura': float(open_element.text),
-                            'fechamento': float(close_element.text),
-                            'maximo': float(high_element.text),
-                            'minimo': float(low_element.text),
-                            'volume': int(float(vol_element.text))
-                        }
-                        cotacoes.append(cotacao)
-                    else:
-                        print(f"[WARNING] Dados de preço incompletos para o ativo {ativo}")
-                except (AttributeError, ValueError) as e:
-                    print(f"[WARNING] Erro ao processar instrumento: {e}")
+
+                    ativo = ticker_node[0].text.strip()
+
+                    market_code_node = report.xpath(".//*[local-name()='MktIdrCd']")
+                    market_code = market_code_node[0].text.strip() if market_code_node and market_code_node[0].text else ""
+                    if market_code not in ["BVMF", "XBSP", "BOVESPA"]:
+                        continue
+
+                    if not (re.match(r'^[A-Z]{3,5}\d{1,2}$', ativo) or re.match(r'^[A-Z]{4,5}11$', ativo)):
+                        continue
+
+                    attrs_node = report.xpath(".//*[local-name()='FinInstrmAttrbts']")
+                    if not attrs_node:
+                        continue
+
+                    attrs = attrs_node[0]
+                    fechamento = attrs.xpath(".//*[local-name()='LastPric']")
+                    if not fechamento or not fechamento[0].text:
+                        continue
+
+                    preco_fechamento = float(fechamento[0].text.strip())
+
+                    def extrair_float(xpath_expr):
+                        val = attrs.xpath(xpath_expr)
+                        return float(val[0].text.strip()) if val and val[0].text else preco_fechamento
+
+                    def extrair_int(xpath_expr):
+                        val = attrs.xpath(xpath_expr)
+                        return int(val[0].text.strip()) if val and val[0].text else 0
+
+                    cotacoes.append({
+                        "ativo": ativo,
+                        "data_pregao": data_pregao,
+                        "abertura": extrair_float(".//*[local-name()='FrstPric']"),
+                        "fechamento": preco_fechamento,
+                        "maximo": extrair_float(".//*[local-name()='MaxPric']"),
+                        "minimo": extrair_float(".//*[local-name()='MinPric']"),
+                        "volume": extrair_int(".//*[local-name()='RglrTxsQty']")
+                    })
+
+                except Exception as e:
+                    print(f"[WARNING] Erro ao processar ativo: {e}")
                     continue
-                    
+
+            print(f"[DEBUG] Total de cotações válidas: {len(cotacoes)}")
             return cotacoes
-            
+
         except Exception as e:
-            print(f"[ERROR] Falha ao processar XML: {e}")
+            print(f"[ERROR] Falha no parse XPath: {e}")
+            import traceback
+            traceback.print_exc()
             return []
-    
+
     def execute(self, date_str=None):
-        """Executa o processo de transformação para uma data específica."""
-        from datetime import datetime, timedelta
-        from etl.common.helpers import yymmdd
-        
-        # Se não forneceu data, usa hoje
         if not date_str:
-            date_str = yymmdd(datetime.now())
-        
-        # Lista os arquivos XML disponíveis
-        xml_files = self.list_xml_files(date_str)
+            selected_date = None
+            xml_files = []
+            for i in range(0, 10):
+                dt = datetime.now() - timedelta(days=i)
+                if dt.weekday() >= 5:
+                    continue
+                candidate = yymmdd(dt)
+                files = self.list_xml_files(candidate)
+                if files:
+                    selected_date = candidate
+                    xml_files = files
+                    break
+            if not xml_files:
+                print("[ERROR] Nenhum arquivo XML encontrado nos últimos dias úteis. Saindo.")
+                return []
+            date_str = selected_date
+        else:
+            xml_files = self.list_xml_files(date_str)
+            if not xml_files:
+                print(f"[INFO] Nenhum arquivo XML encontrado para {date_str}. Saindo.")
+                return []
+
         print(f"[INFO] Encontrados {len(xml_files)} arquivos XML com prefixo 'xml/{date_str}/'")
-        
-        # Se não encontrou para hoje, tenta ontem
-        if not xml_files:
-            yesterday = yymmdd(datetime.now() - timedelta(days=1))
-            print(f"[INFO] Nenhum arquivo XML encontrado para hoje. Tentando para ontem ({yesterday})...")
-            xml_files = self.list_xml_files(yesterday)
-            print(f"[INFO] Encontrados {len(xml_files)} arquivos XML com prefixo 'xml/{yesterday}/'")
-            date_str = yesterday
-        
-        if not xml_files:
-            print("[ERROR] Nenhum arquivo XML encontrado para hoje ou ontem. Saindo.")
-            return []
-        
+
         all_cotacoes = []
-        
-        # Processa cada arquivo XML
+
         for xml_file in xml_files:
             print(f"[INFO] Processando {xml_file}...")
             xml_content = self.download_xml(xml_file)
             if not xml_content:
                 print(f"[WARNING] Não foi possível baixar o conteúdo de {xml_file}")
                 continue
-                
+
             cotacoes = self.parse_xml(xml_content)
             if cotacoes:
                 all_cotacoes.extend(cotacoes)
                 print(f"[OK] Extraídas {len(cotacoes)} cotações de {xml_file}")
             else:
                 print(f"[WARNING] Nenhuma cotação válida extraída de {xml_file}")
-        
+
         print(f"[INFO] Total de cotações extraídas: {len(all_cotacoes)}")
         return all_cotacoes
 
-# Script de execução
 def run():
     parser = B3XMLParser()
     cotacoes = parser.execute()

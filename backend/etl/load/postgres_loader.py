@@ -1,129 +1,123 @@
-import psycopg2
-import time
 from etl.common.config import Config
-from etl.transform.xml_parse import run as transform_run
+import psycopg2
+from datetime import datetime
 
 class PostgresLoader:
     def __init__(self):
-        self.host = Config.POSTGRES_HOST
-        self.port = Config.POSTGRES_PORT
-        self.database = Config.POSTGRES_DB
-        self.user = Config.POSTGRES_USER
-        self.password = Config.POSTGRES_PASSWORD
         self.conn = None
+        self.cursor = None
     
     def connect(self, max_retries=5, retry_interval=2):
-        """Conecta ao PostgreSQL com tentativas em caso de falha."""
-        retry_count = 0
-        last_error = None
+        """Conecta ao banco PostgreSQL"""
+        import time
         
-        while retry_count < max_retries:
+        for attempt in range(max_retries):
             try:
                 self.conn = psycopg2.connect(
-                    host=self.host,
-                    port=self.port,
-                    database=self.database,
-                    user=self.user,
-                    password=self.password
+                    host=Config.POSTGRES_HOST,
+                    port=Config.POSTGRES_PORT,
+                    dbname=Config.POSTGRES_DB,
+                    user=Config.POSTGRES_USER,
+                    password=Config.POSTGRES_PASSWORD
                 )
+                self.conn.autocommit = False
+                self.cursor = self.conn.cursor()
                 print("[INFO] Conexão com o PostgreSQL estabelecida com sucesso.")
                 return True
             except psycopg2.OperationalError as e:
-                last_error = e
-                retry_count += 1
-                wait_time = retry_interval * retry_count
-                print(f"[WARNING] Tentativa {retry_count}/{max_retries} falhou. Aguardando {wait_time}s...")
-                time.sleep(wait_time)
-        
-        print(f"[ERROR] Falha ao conectar ao PostgreSQL após {max_retries} tentativas: {last_error}")
+                if attempt < max_retries - 1:
+                    print(f"[WARNING] Falha na conexão (tentativa {attempt+1}/{max_retries}): {str(e)}")
+                    time.sleep(retry_interval)
+                else:
+                    print(f"[ERROR] Não foi possível conectar ao PostgreSQL após {max_retries} tentativas: {str(e)}")
+                    raise
         return False
     
     def disconnect(self):
-        """Fecha a conexão com o PostgreSQL."""
+        """Encerra a conexão com o banco de dados"""
+        if self.cursor:
+            self.cursor.close()
         if self.conn:
             self.conn.close()
-            self.conn = None
-    
-    def insert_cotacoes(self, cotacoes):
-        """Insere ou atualiza cotações no banco de dados."""
-        if not self.conn:
-            if not self.connect():
-                return 0
-        
-        inserted = 0
-        updated = 0
-        
-        try:
-            cursor = self.conn.cursor()
-            
-            for cotacao in cotacoes:
-                # Verifica se o registro já existe
-                cursor.execute(
-                    "SELECT id FROM cotacoes WHERE ativo = %s AND data_pregao = %s",
-                    (cotacao['ativo'], cotacao['data_pregao'])
-                )
-                existing = cursor.fetchone()
-                
-                if existing:
-                    # Atualiza o registro existente
-                    cursor.execute("""
-                        UPDATE cotacoes 
-                        SET abertura = %s, fechamento = %s, maximo = %s, minimo = %s, volume = %s
-                        WHERE ativo = %s AND data_pregao = %s
-                    """, (
-                        cotacao['abertura'], cotacao['fechamento'], 
-                        cotacao['maximo'], cotacao['minimo'], cotacao['volume'],
-                        cotacao['ativo'], cotacao['data_pregao']
-                    ))
-                    updated += 1
-                else:
-                    # Insere novo registro
-                    cursor.execute("""
-                        INSERT INTO cotacoes 
-                        (ativo, data_pregao, abertura, fechamento, maximo, minimo, volume)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    """, (
-                        cotacao['ativo'], cotacao['data_pregao'],
-                        cotacao['abertura'], cotacao['fechamento'],
-                        cotacao['maximo'], cotacao['minimo'], cotacao['volume']
-                    ))
-                    inserted += 1
-            
-            self.conn.commit()
-            print(f"[OK] {inserted} registros inseridos, {updated} registros atualizados")
-            return inserted + updated
-            
-        except Exception as e:
-            self.conn.rollback()
-            print(f"[ERROR] Falha ao inserir cotações: {e}")
-            return 0
     
     def execute(self, cotacoes):
-        """Executa o processo de carga completo."""
+        """Insere as cotações no banco de dados"""
         if not cotacoes:
             print("[WARNING] Nenhuma cotação para inserir")
             return 0
-        
-        if self.connect():
-            try:
-                total = self.insert_cotacoes(cotacoes)
-                print(f"[SUCCESS] Processo de carga concluído! Total de registros: {total}")
-                return total
-            finally:
-                self.disconnect()
-        
-        return 0
+            
+        try:
+            if not self.conn or self.conn.closed:
+                self.connect()
+                
+            inserted = 0
+            updated = 0
+            
+            for cotacao in cotacoes:
+                # Mapeamento direto - agora os campos do JSON são exatamente os mesmos do banco
+                registro = {
+                    'ativo': cotacao['ativo'],
+                    'data_pregao': cotacao['data_pregao'],
+                    'abertura': cotacao['abertura'],
+                    'fechamento': cotacao['fechamento'],
+                    'maximo': cotacao['maximo'],
+                    'minimo': cotacao['minimo'],
+                    'volume': cotacao['volume'],
+                    # timestamp_processamento é preenchido automaticamente pelo banco
+                }
+                
+                # Verifica se o registro já existe
+                self.cursor.execute(
+                    "SELECT id FROM cotacoes WHERE ativo = %s AND data_pregao = %s",
+                    (registro['ativo'], registro['data_pregao'])
+                )
+                
+                result = self.cursor.fetchone()
+                
+                if result:
+                    # Atualiza o registro existente
+                    cotacao_id = result[0]
+                    update_fields = []
+                    update_values = []
+                    
+                    for key, value in registro.items():
+                        if key != 'ativo' and key != 'data_pregao':  # Não atualiza as chaves
+                            update_fields.append(f"{key} = %s")
+                            update_values.append(value)
+                    
+                    update_query = f"UPDATE cotacoes SET {', '.join(update_fields)} WHERE id = %s"
+                    self.cursor.execute(update_query, update_values + [cotacao_id])
+                    updated += 1
+                else:
+                    # Insere novo registro
+                    columns = ', '.join(registro.keys())
+                    placeholders = ', '.join(['%s'] * len(registro))
+                    insert_query = f"INSERT INTO cotacoes ({columns}) VALUES ({placeholders})"
+                    self.cursor.execute(insert_query, list(registro.values()))
+                    inserted += 1
+            
+            self.conn.commit()
+            print(f"[SUCCESS] Processo de carga concluído! Inseridos: {inserted}, Atualizados: {updated}")
+            return inserted + updated
+            
+        except Exception as e:
+            if self.conn:
+                self.conn.rollback()
+            print(f"[ERROR] Falha ao inserir cotações: {str(e)}")
+            raise
+            
+        finally:
+            self.disconnect()
 
 # Script de execução
 def run(cotacoes=None):
-    if cotacoes is None:
-        # Se não forneceu cotações, tenta obter da etapa de transformação
-
-        cotacoes = transform_run()
+    from etl.transform.xml_parse import run as transform_run
     
+    if cotacoes is None:
+        cotacoes = transform_run()
+        
     loader = PostgresLoader()
-    result = loader.execute(cotacoes)
-    return result
+    return loader.execute(cotacoes)
 
-if __name__ == "__main__":
+if __name__ == "_main_":
     run()
