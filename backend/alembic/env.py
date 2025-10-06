@@ -1,16 +1,22 @@
 from logging.config import fileConfig
-
+import os
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
-
 from alembic import context
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
+# Sobrescrever a URL de conexão com variáveis de ambiente
+config.set_main_option('sqlalchemy.url', 
+                      f"postgresql://{os.getenv('POSTGRES_USER', 'user')}:"
+                      f"{os.getenv('POSTGRES_PASSWORD', 'password')}@"
+                      f"{os.getenv('POSTGRES_HOST', 'postgres')}:"
+                      f"{os.getenv('POSTGRES_PORT', '5432')}/"
+                      f"{os.getenv('POSTGRES_DB', 'b3_data')}")
+
 # Interpret the config file for Python logging.
-# This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
@@ -27,17 +33,7 @@ target_metadata = None
 
 
 def run_migrations_offline() -> None:
-    """Run migrations in 'offline' mode.
-
-    This configures the context with just a URL
-    and not an Engine, though an Engine is acceptable
-    here as well.  By skipping the Engine creation
-    we don't even need a DBAPI to be available.
-
-    Calls to context.execute() here emit the given string to the
-    script output.
-
-    """
+    """Run migrations in 'offline' mode."""
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
@@ -51,12 +47,7 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode.
-
-    In this scenario we need to create an Engine
-    and associate a connection with the context.
-
-    """
+    """Run migrations in 'online' mode."""
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",

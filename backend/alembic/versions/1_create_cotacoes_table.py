@@ -2,7 +2,7 @@
 
 Revision ID: 1
 Revises: 
-Create Date: 2025-10-01 20:00:00.000000
+Create Date: 2025-10-05 22:00:00.000000
 
 """
 from typing import Sequence, Union
@@ -22,21 +22,19 @@ def upgrade() -> None:
     op.create_table(
         'cotacoes',
         sa.Column('id', sa.Integer, primary_key=True),
+        sa.Column('ativo', sa.String, nullable=False),
         sa.Column('data_pregao', sa.Date, nullable=False),
-        sa.Column('cod_bdi', sa.String),
-        sa.Column('sigla_acao', sa.String, nullable=False),
-        sa.Column('tipo_mercado', sa.String),
-        sa.Column('nome_empresa', sa.String),
-        sa.Column('especificacao_papel', sa.String),
-        sa.Column('preco_abertura', sa.Numeric(18, 2)),
-        sa.Column('preco_maximo', sa.Numeric(18, 2)),
-        sa.Column('preco_minimo', sa.Numeric(18, 2)),
-        sa.Column('preco_medio', sa.Numeric(18, 2)),
-        sa.Column('preco_fechamento', sa.Numeric(18, 2)),
-        sa.Column('quantidade_negociada', sa.BigInteger),
-        sa.Column('volume_negociado', sa.Numeric(18, 2)),
+        sa.Column('abertura', sa.Numeric(15, 2)),
+        sa.Column('fechamento', sa.Numeric(15, 2)),
+        sa.Column('maximo', sa.Numeric(15, 2)),
+        sa.Column('minimo', sa.Numeric(15, 2)),
+        sa.Column('volume', sa.BigInteger),
+        sa.Column('timestamp_processamento', sa.DateTime, server_default=sa.text('CURRENT_TIMESTAMP'))
     )
+    
+    op.create_index('idx_ativo_data', 'cotacoes', ['ativo', 'data_pregao'], unique=True)
 
 
 def downgrade() -> None:
+    op.drop_index('idx_ativo_data', 'cotacoes')
     op.drop_table('cotacoes')
