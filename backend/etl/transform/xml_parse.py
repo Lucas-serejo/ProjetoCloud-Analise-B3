@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from etl.common.storage import get_container_client, download_blob_to_string, list_blobs
 from etl.common.config import Config
 from etl.common.helpers import yymmdd
+import json
 import re
 
 class B3XMLParser:
@@ -147,7 +148,6 @@ class B3XMLParser:
 
         print(f"[INFO] Total de cotações extraídas: {len(all_cotacoes)}")
         
-        # Opcionalmente, exportar para JSON
         if all_cotacoes and Config.EXPORT_JSON:
             json_path = Config.DATA_DIR / f"cotacoes_{date_str}.json"
             with open(json_path, "w", encoding="utf-8") as f:
