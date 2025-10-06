@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from etl.common.storage import get_container_client, download_blob_to_string, list_blobs
 from etl.common.config import Config
 from etl.common.helpers import yymmdd
+import json
 import re
 
 class B3XMLParser:
@@ -161,6 +162,13 @@ class B3XMLParser:
                 print(f"[WARNING] Nenhuma cotação válida extraída de {xml_file}")
 
         print(f"[INFO] Total de cotações extraídas: {len(all_cotacoes)}")
+        
+        if all_cotacoes and Config.EXPORT_JSON:
+            json_path = Config.DATA_DIR / f"cotacoes_{date_str}.json"
+            with open(json_path, "w", encoding="utf-8") as f:
+                json.dump(all_cotacoes, f, ensure_ascii=False, default=str, indent=2)
+            print(f"[INFO] Cotações exportadas para JSON: {json_path}")
+            
         return all_cotacoes
 
 def run():
