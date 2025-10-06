@@ -4,36 +4,26 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 from alembic import context
 
-# this is the Alembic Config object, which provides
-# access to the values within the .ini file in use.
+# Configuração do Alembic
 config = context.config
 
-# Sobrescrever a URL de conexão com variáveis de ambiente
+# Sobrescreve a URL de conexão com variáveis de ambiente
 config.set_main_option('sqlalchemy.url', 
-                      f"postgresql://{os.getenv('POSTGRES_USER', 'user')}:"
+                      f"postgresql://{os.getenv('POSTGRES_USER', 'user')}:"  
                       f"{os.getenv('POSTGRES_PASSWORD', 'password')}@"
-                      f"{os.getenv('POSTGRES_HOST', 'postgres')}:"
-                      f"{os.getenv('POSTGRES_PORT', '5432')}/"
-                      f"{os.getenv('POSTGRES_DB', 'b3_data')}")
+                      f"{os.getenv('POSTGRES_HOST', 'postgres')}:"  
+                      f"{os.getenv('POSTGRES_PORT', '5432')}/"  
+                      f"{os.getenv('POSTGRES_DB', 'b3_data')}")  
 
-# Interpret the config file for Python logging.
+# Configuração de logging
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# add your model's MetaData object here
-# for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
-target_metadata = None
-
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
-
+# Metadados do modelo para autogeração de migrações
+target_metadata = None  
 
 def run_migrations_offline() -> None:
-    """Run migrations in 'offline' mode."""
+    # Roda migrações em modo 'offline'.
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
@@ -47,7 +37,7 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode."""
+    # Roda migrações em modo 'online'.
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",

@@ -8,7 +8,7 @@ class PostgresLoader:
         self.cursor = None
     
     def connect(self, max_retries=5, retry_interval=2):
-        """Conecta ao banco PostgreSQL"""
+        # Estabelece a conexão com o banco de dados PostgreSQL
         import time
         
         for attempt in range(max_retries):
@@ -24,6 +24,7 @@ class PostgresLoader:
                 self.cursor = self.conn.cursor()
                 print("[INFO] Conexão com o PostgreSQL estabelecida com sucesso.")
                 return True
+            # Captura outras exceções
             except psycopg2.OperationalError as e:
                 if attempt < max_retries - 1:
                     print(f"[WARNING] Falha na conexão (tentativa {attempt+1}/{max_retries}): {str(e)}")
@@ -34,14 +35,14 @@ class PostgresLoader:
         return False
     
     def disconnect(self):
-        """Encerra a conexão com o banco de dados"""
+        # Encerra a conexão com o banco de dados
         if self.cursor:
             self.cursor.close()
         if self.conn:
             self.conn.close()
     
     def execute(self, cotacoes):
-        """Insere as cotações no banco de dados"""
+        # Insere as cotações no banco de dados
         if not cotacoes:
             print("[WARNING] Nenhuma cotação para inserir")
             return 0
@@ -54,7 +55,7 @@ class PostgresLoader:
             updated = 0
             
             for cotacao in cotacoes:
-                # Mapeamento direto - agora os campos do JSON são exatamente os mesmos do banco
+            # Monta o dicionário de registro
                 registro = {
                     'ativo': cotacao['ativo'],
                     'data_pregao': cotacao['data_pregao'],
@@ -81,7 +82,8 @@ class PostgresLoader:
                     update_values = []
                     
                     for key, value in registro.items():
-                        if key != 'ativo' and key != 'data_pregao':  # Não atualiza as chaves
+                        # Evita atualizar campos chave
+                        if key != 'ativo' and key != 'data_pregao':  
                             update_fields.append(f"{key} = %s")
                             update_values.append(value)
                     
@@ -109,7 +111,6 @@ class PostgresLoader:
         finally:
             self.disconnect()
 
-# Script de execução
 def run(cotacoes=None):
     from etl.transform.xml_parse import run as transform_run
     

@@ -9,6 +9,7 @@ class B3XMLParser:
     def __init__(self):
         self.container_client = get_container_client()
 
+    # Lista arquivos XML no blob storage para uma data específica
     def list_xml_files(self, date_str):
         prefix = f"xml/{date_str}/"
         blobs = list_blobs(self.container_client, name_starts_with=prefix)
@@ -19,6 +20,7 @@ class B3XMLParser:
         return content
 
     def parse_xml(self, xml_content):
+        # Faz o parse do XML e extrai as cotações usando XPath
         try:
             data = xml_content.encode("utf-8") if isinstance(xml_content, str) else xml_content
             root = ET.fromstring(data)
@@ -31,6 +33,7 @@ class B3XMLParser:
 
             print(f"[DEBUG] Root tag: {root.tag}")
 
+            # Extrai a data do pregão
             data_s = root.xpath("string(.//bvmf217:TradDt/bvmf217:Dt)", namespaces=namespaces)
             if data_s:
                 data_pregao = datetime.strptime(data_s, "%Y-%m-%d").date()
@@ -42,29 +45,35 @@ class B3XMLParser:
             price_reports = root.xpath(".//bvmf217:PricRpt", namespaces=namespaces)
             print(f"[DEBUG] Encontrados {len(price_reports)} relatórios de preço")
 
+            # Monta a lista de cotações
             cotacoes = []
             for i, report in enumerate(price_reports):
                 try:
                     print(f"[DEBUG] Processando relatório {i+1}")
 
+                    # Verifica se o ativo está presente, se sim extrai
                     ticker_node = report.xpath(".//*[local-name()='TckrSymb']")
                     if not ticker_node or not ticker_node[0].text:
                         continue
-
+                    
                     ativo = ticker_node[0].text.strip()
 
+                    # Verifica se o código de mercado está presente 
                     market_code_node = report.xpath(".//*[local-name()='MktIdrCd']")
                     market_code = market_code_node[0].text.strip() if market_code_node and market_code_node[0].text else ""
                     if market_code not in ["BVMF", "XBSP", "BOVESPA"]:
                         continue
-
+                    
+                    # Filtra ativos que não são ações ou ETFs
                     if not (re.match(r'^[A-Z]{3,5}\d{1,2}$', ativo) or re.match(r'^[A-Z]{4,5}11$', ativo)):
                         continue
 
+                    # Verifica se existem atributos financeiros
                     attrs_node = report.xpath(".//*[local-name()='FinInstrmAttrbts']")
                     if not attrs_node:
                         continue
-
+                    
+                    # Se houver, pega o primeiro (deveria haver só um)
                     attrs = attrs_node[0]
                     fechamento = attrs.xpath(".//*[local-name()='LastPric']")
                     if not fechamento or not fechamento[0].text:
@@ -72,6 +81,7 @@ class B3XMLParser:
 
                     preco_fechamento = float(fechamento[0].text.strip())
 
+                    # Funções auxiliares para extração de valores
                     def extrair_float(xpath_expr):
                         val = attrs.xpath(xpath_expr)
                         return float(val[0].text.strip()) if val and val[0].text else preco_fechamento
@@ -103,7 +113,9 @@ class B3XMLParser:
             traceback.print_exc()
             return []
 
+    # Executa o processo de extração e transformação
     def execute(self, date_str=None):
+        # Se date_str não for fornecida, tenta encontrar a data mais recente com arquivos XML
         if not date_str:
             selected_date = None
             xml_files = []
@@ -121,6 +133,7 @@ class B3XMLParser:
                 print("[ERROR] Nenhum arquivo XML encontrado nos últimos dias úteis. Saindo.")
                 return []
             date_str = selected_date
+        # Se date_str for fornecida, lista arquivos XML para essa data
         else:
             xml_files = self.list_xml_files(date_str)
             if not xml_files:
@@ -131,6 +144,7 @@ class B3XMLParser:
 
         all_cotacoes = []
 
+        # Processa cada arquivo XML
         for xml_file in xml_files:
             print(f"[INFO] Processando {xml_file}...")
             xml_content = self.download_xml(xml_file)
@@ -139,6 +153,7 @@ class B3XMLParser:
                 continue
 
             cotacoes = self.parse_xml(xml_content)
+            # Verifica se as cotações foram extraídas com sucesso
             if cotacoes:
                 all_cotacoes.extend(cotacoes)
                 print(f"[OK] Extraídas {len(cotacoes)} cotações de {xml_file}")

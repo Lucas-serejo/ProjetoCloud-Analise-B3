@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""
-Script para testar o pipeline completo localmente
-"""
+# Script para testar o pipeline ETL completo
+
 import os
 import psycopg2
 from datetime import datetime
 from azure.storage.blob import BlobServiceClient
 
-# --- Configurações ---
 # Azurite
 AZURE_BLOB_CONNECTION = os.getenv(
     "AZURE_STORAGE_CONNECTION_STRING", 
@@ -24,7 +22,7 @@ POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "password")
 
 
 def check_azurite():
-    """Verifica se Azurite está disponível e lista containers"""
+    # Verifica se Azurite está disponível
     try:
         print("\n=== TESTE DE CONEXÃO COM AZURITE ===")
         client = BlobServiceClient.from_connection_string(AZURE_BLOB_CONNECTION)
@@ -39,7 +37,7 @@ def check_azurite():
 
 
 def list_blobs():
-    """Lista blobs no container de dados da B3"""
+    # Lista blobs no container especificado
     try:
         print("\n=== BLOBS DISPONÍVEIS EM DADOS-PREGAO ===")
         client = BlobServiceClient.from_connection_string(AZURE_BLOB_CONNECTION)
@@ -60,7 +58,8 @@ def list_blobs():
         # Imprime blobs agrupados por prefixo
         for prefix, blobs in blobs_by_prefix.items():
             print(f"\nPrefixo '{prefix}':")
-            for i, blob in enumerate(sorted(blobs)[:5]):  # Mostra só os primeiros 5 de cada grupo
+            # Mostra só os primeiros 5 de cada grupo
+            for i, blob in enumerate(sorted(blobs)[:5]):  
                 print(f"  • {blob}")
             if len(blobs) > 5:
                 print(f"  ... e mais {len(blobs) - 5} arquivo(s)")
@@ -72,7 +71,7 @@ def list_blobs():
 
 
 def check_postgres():
-    """Verifica a conexão com o PostgreSQL"""
+    # Verifica se PostgreSQL está disponível
     try:
         print("\n=== TESTE DE CONEXÃO COM POSTGRES ===")
         conn = psycopg2.connect(
@@ -91,7 +90,7 @@ def check_postgres():
 
 
 def list_postgres_data():
-    """Lista os dados da tabela cotacoes"""
+    # Lista os dados na tabela cotacoes
     try:
         print("\n=== DADOS NO POSTGRESQL ===")
         conn = psycopg2.connect(
@@ -140,7 +139,7 @@ def list_postgres_data():
 
 
 def main():
-    """Testa todo o pipeline"""
+    # Teste do pipeline completo
     print("🔍 VERIFICAÇÃO DO PIPELINE B3 → BLOB → POSTGRES")
     print(f"Data/Hora: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     

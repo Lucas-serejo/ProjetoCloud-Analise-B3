@@ -21,11 +21,9 @@ class B3Extractor:
         self.data_dir = Config.DATA_DIR
     
     def build_url(self, date_str):
-        """Constrói a URL para download do arquivo da B3."""
         return f"https://www.b3.com.br/pesquisapregao/download?filelist=SPRE{date_str}.zip"
     
     def download_zip(self, date_str=None):
-        """Baixa o arquivo ZIP da B3 para a data especificada ou atual."""
         if not date_str:
             date_str = yymmdd(datetime.now())
         
@@ -48,7 +46,7 @@ class B3Extractor:
         return None, None
     
     def extract_files(self, zip_bytes, date_str):
-        """Extrai os arquivos do ZIP da B3."""
+        # Extrai os arquivos do ZIP da B3.
         # Garantir que o diretório existe
         self.data_dir.mkdir(parents=True, exist_ok=True)
         
@@ -88,7 +86,7 @@ class B3Extractor:
         }
     
     def execute(self):
-        """Executa o processo de extração completo."""
+        # Executa o processo de extração completo.
         # Percorre últimos dias úteis até encontrar um arquivo disponível
         zip_bytes = None
         date_str = None
@@ -100,7 +98,6 @@ class B3Extractor:
                 date_str = ok_date
                 break
             else:
-                # Log auxiliar para troubleshooting quando pular para o próximo dia útil
                 print(f"[WARNING] Arquivo indisponível para {ds}, tentando dia útil anterior...")
         
         if not zip_bytes:
@@ -114,7 +111,6 @@ class B3Extractor:
         
         return result
 
-# Script de execução
     def run(self):
         extractor = B3Extractor()
         result = extractor.execute()

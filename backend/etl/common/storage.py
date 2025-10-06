@@ -4,11 +4,11 @@ from pathlib import Path
 from etl.common.config import Config
 
 def get_blob_service_client():
-    """Retorna um cliente do Azure Blob Storage."""
+    # Retorna um cliente de serviço de blob usando a string de conexão.
     return BlobServiceClient.from_connection_string(Config.AZURE_STORAGE_CONNECTION)
 
 def get_container_client(container_name=None):
-    """Obtém ou cria um container no Azure Blob Storage."""
+    # Retorna um cliente de container, criando o container se não existir.
     container = container_name or Config.CONTAINER_NAME
     service = get_blob_service_client()
     container_client = service.get_container_client(container)
@@ -20,7 +20,7 @@ def get_container_client(container_name=None):
     return container_client
 
 def upload_blob(container_client, blob_name, local_path):
-    """Faz upload de um arquivo para o Blob Storage."""
+    # Faz upload de um arquivo local para o blob storage.
     path = Path(local_path)
     try:
         with open(path, "rb") as data:
@@ -32,7 +32,7 @@ def upload_blob(container_client, blob_name, local_path):
         return False
 
 def download_blob_to_string(container_client, blob_name):
-    """Baixa um blob e retorna seu conteúdo como string."""
+    # Baixa o conteúdo de um blob como string.
     try:
         blob_client = container_client.get_blob_client(blob_name)
         download = blob_client.download_blob()
@@ -43,7 +43,7 @@ def download_blob_to_string(container_client, blob_name):
         return None
 
 def list_blobs(container_client, name_starts_with=None):
-    """Lista blobs em um container com prefixo opcional."""
+    # Lista blobs em um container com prefixo opcional.
     try:
         blobs = list(container_client.list_blobs(name_starts_with=name_starts_with))
         return blobs

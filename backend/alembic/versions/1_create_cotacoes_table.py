@@ -6,19 +6,17 @@ Create Date: 2025-10-05 22:00:00.000000
 
 """
 from typing import Sequence, Union
-
 from alembic import op
 import sqlalchemy as sa
 
-
-# revision identifiers, used by Alembic.
+# Identificadores de revisão usados pelo Alembic.
 revision: str = '1'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-
 def upgrade() -> None:
+    # Cria a tabela 'cotacoes'
     op.create_table(
         'cotacoes',
         sa.Column('id', sa.Integer, primary_key=True),
@@ -32,9 +30,10 @@ def upgrade() -> None:
         sa.Column('timestamp_processamento', sa.DateTime, server_default=sa.text('CURRENT_TIMESTAMP'))
     )
     
+    # Cria um índice único para 'ativo' e 'data_pregao'
     op.create_index('idx_ativo_data', 'cotacoes', ['ativo', 'data_pregao'], unique=True)
 
-
 def downgrade() -> None:
+    # Remove o índice e a tabela 'cotacoes'
     op.drop_index('idx_ativo_data', 'cotacoes')
     op.drop_table('cotacoes')
