@@ -19,6 +19,9 @@ services:
       - POSTGRES_DB=b3_data
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=password
+      - EXPORT_JSON=false
+      - MULTI_DAY_PROCESSING=false
+      - MULTI_DAY_LIMIT=6
     restart: on-failure
 
   azurite:

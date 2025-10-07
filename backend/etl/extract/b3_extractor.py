@@ -111,31 +111,77 @@ class B3Extractor:
         
         return result
 
-    def run(self):
-        extractor = B3Extractor()
-        result = extractor.execute()
+    def run(self, multi_day=False, days_limit=5):
+        """
+        Executa o processo completo de extração.
         
-        if os.getenv("UPLOAD_TO_BLOB", "true").lower() == "true":
-            from etl.common.storage import get_container_client, upload_blob
+        Args:
+            multi_day (bool): Se True, tenta extrair dados de múltiplos dias
+            days_limit (int): Número máximo de dias úteis a processar
+        """
+        results = []
+        processed_dates = set()
+        
+        # Se multi_day=True, tentamos extrair dados de vários dias úteis
+        # Se multi_day=False, paramos no primeiro dia disponível (comportamento original)
+        for dt in iter_uteis_ate(max_days=days_limit):
+            date_str = yymmdd(dt)
             
-            print("[INFO] Iniciando upload para o Blob Storage...")
-            container = get_container_client()
+            if date_str in processed_dates:
+                continue
+                
+            zip_bytes, ok_date = self.download_zip(date_str)
             
-            # Upload dos XMLs
-            xml_dir = result["xml_dir"]
-            date_str = result["date"]
-            uploaded = 0
-            
-            for xml_file in result["xml_files"]:
-                relative_path = xml_file.relative_to(xml_dir)
-                blob_name = f"xml/{date_str}/{relative_path}"
-                if upload_blob(container, blob_name, xml_file):
-                    uploaded += 1
-            
-            print(f"[OK] {uploaded} arquivos XML enviados para o blob storage")
+            if zip_bytes:
+                print(f"[OK] Baixado arquivo de cotações para {ok_date}")
+                result = self.extract_files(zip_bytes, ok_date)
+                
+                # Upload para o blob storage
+                if os.getenv("UPLOAD_TO_BLOB", "true").lower() == "true":
+                    self.upload_to_blob(result)
+                    
+                results.append(result)
+                processed_dates.add(ok_date)
+                
+                # Se não estamos em modo multi-dia, paramos após o primeiro sucesso
+                if not multi_day:
+                    break
+            else:
+                print(f"[WARNING] Arquivo indisponível para {date_str}, tentando próxima data...")
+        
+        if not results:
+            raise RuntimeError("Não foi possível baixar o arquivo de cotações nos últimos dias úteis verificados")
+        
+        # Retorna um dicionário combinado com todos os resultados
+        combined_result = {
+            "dates": [r["date"] for r in results],
+            "zip_paths": [r["zip_path"] for r in results],
+            "xml_dirs": [r["xml_dir"] for r in results],
+            "xml_files": [item for r in results for item in r["xml_files"]]
+        }
+        
+        return combined_result
+
+    # Método auxiliar para upload de blobs
+    def upload_to_blob(self, result):
+        print("[INFO] Iniciando upload para o Blob Storage...")
+        container = get_container_client()
+        
+        # Upload dos XMLs
+        xml_dir = result["xml_dir"]
+        date_str = result["date"]
+        uploaded = 0
+        
+        for xml_file in result["xml_files"]:
+            relative_path = xml_file.relative_to(xml_dir)
+            blob_name = f"xml/{date_str}/{relative_path}"
+            if upload_blob(container, blob_name, xml_file):
+                uploaded += 1
+        
+        print(f"[OK] {uploaded} arquivos XML enviados para o blob storage")
         
         return result
 
 if __name__ == "__main__":
     extractor = B3Extractor()
-    extractor.run() 
+    extractor.run()
