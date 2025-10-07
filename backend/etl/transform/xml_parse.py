@@ -128,14 +128,18 @@ class B3XMLParser:
         
         # Lista de dias úteis a processar
         dates_to_process = []
-        today = datetime.now()
+        today = datetime.now().date()
+        
         for i in range(0, days_limit):
-            dt = datetime.now() - timedelta(days=i)
+            dt = (datetime.now() - timedelta(days=i)).date()
+            
             if dt > today:
                 continue
+
             if dt.weekday() >= 5:
                 continue
-            dates_to_process.append(yymmdd(dt))
+                
+            dates_to_process.append(yymmdd(datetime.combine(dt, datetime.min.time())))
         
         # Se não estiver em modo multi-dia, processar apenas um dia
         if not multi_day:

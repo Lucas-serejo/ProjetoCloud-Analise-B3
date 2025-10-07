@@ -11,8 +11,7 @@ from datetime import datetime, timedelta
 import time
 import os
 
-TODAY = datetime.now()
-
+# CORREÇÃO: Não usar TODAY como comparador, usar apenas para evitar datas futuras
 def run_pipeline_for_date(date_str):
     """Executa o pipeline ETL completo para uma data específica"""
     print(f"\n=== INICIANDO PIPELINE ETL B3 PARA {date_str} ===\n", flush=True)
@@ -65,13 +64,19 @@ def run_pipeline():
     # Se modo multi_day, processa cada dia individualmente
     if Config.MULTI_DAY_PROCESSING:
         dates_to_process = []
+        today = datetime.now().date()  # Data de hoje para comparação
+        
         for i in range(0, Config.MULTI_DAY_LIMIT):
-            dt = datetime.now() - timedelta(days=i)
-            if dt > TODAY:
+            dt = (datetime.now() - timedelta(days=i)).date()
+            
+            # CORREÇÃO: Não excluir o dia atual, apenas dias futuros
+            if dt > today:
                 continue
-            if dt.weekday() >= 5:
+                
+            if dt.weekday() >= 5:  # Pula finais de semana
                 continue
-            dates_to_process.append(yymmdd(dt))
+                
+            dates_to_process.append(yymmdd(datetime.combine(dt, datetime.min.time())))
             
         print(f"[INFO] Modo multi-dia ativado. Processando {len(dates_to_process)} dias: {', '.join(dates_to_process)}", flush=True)
         
@@ -83,15 +88,19 @@ def run_pipeline():
     
     # Modo padrão - processa apenas um dia
     else:
+        today = datetime.now().date()
+        
         # Tenta processar dias recentes até encontrar um disponível
-        for i in range(10):
-            dt = datetime.now() - timedelta(days=i)
-            if dt > TODAY:
+        for i in range(10):  # Tenta no máximo 10 dias
+            dt = (datetime.now() - timedelta(days=i)).date()
+            
+            if dt > today:
                 continue
+                
             if dt.weekday() >= 5:
                 continue
             
-            date_str = yymmdd(dt)
+            date_str = yymmdd(datetime.combine(dt, datetime.min.time()))
             records = run_pipeline_for_date(date_str)
             if records > 0:
                 total_records = records

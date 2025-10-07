@@ -11,11 +11,16 @@ from etl.common.storage import get_container_client, upload_blob
 def iter_uteis_ate(max_days: int = 10, base: datetime | None = None):
     if base is None:
         base = datetime.now()
-    today = base.date()
+    today = datetime.now().date()
+    
     for i in range(max_days):
-        dt = base - timedelta(days=i)
-        if dt.weekday() < 5 and dt <= today:
-            yield dt
+        dt = (base - timedelta(days=i)).date()
+        
+        if dt > today:
+            continue
+            
+        if dt.weekday() < 5:
+            yield datetime.combine(dt, datetime.min.time())
 
 class B3Extractor:
     def __init__(self):
