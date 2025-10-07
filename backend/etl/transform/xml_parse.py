@@ -128,9 +128,12 @@ class B3XMLParser:
         
         # Lista de dias úteis a processar
         dates_to_process = []
+        today = datetime.now()
         for i in range(0, days_limit):
             dt = datetime.now() - timedelta(days=i)
-            if dt.weekday() >= 5:  # Pula finais de semana
+            if dt > today:
+                continue
+            if dt.weekday() >= 5:
                 continue
             dates_to_process.append(yymmdd(dt))
         
@@ -141,7 +144,7 @@ class B3XMLParser:
                 if xml_files:
                     cotacoes = self._process_date(date_str, xml_files)
                     all_cotacoes.extend(cotacoes)
-                    break  # Processa apenas o primeiro dia com dados disponíveis
+                    break
         
         # Se estiver em modo multi-dia, processar múltiplos dias
         else:

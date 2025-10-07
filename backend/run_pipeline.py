@@ -11,6 +11,8 @@ from datetime import datetime, timedelta
 import time
 import os
 
+TODAY = datetime.now()
+
 def run_pipeline_for_date(date_str):
     """Executa o pipeline ETL completo para uma data específica"""
     print(f"\n=== INICIANDO PIPELINE ETL B3 PARA {date_str} ===\n")
@@ -65,6 +67,8 @@ def run_pipeline():
         dates_to_process = []
         for i in range(0, Config.MULTI_DAY_LIMIT):
             dt = datetime.now() - timedelta(days=i)
+            if dt > TODAY:
+                continue
             if dt.weekday() >= 5:
                 continue
             dates_to_process.append(yymmdd(dt))
@@ -82,6 +86,8 @@ def run_pipeline():
         # Tenta processar dias recentes até encontrar um disponível
         for i in range(10):
             dt = datetime.now() - timedelta(days=i)
+            if dt > TODAY:
+                continue
             if dt.weekday() >= 5:
                 continue
             
