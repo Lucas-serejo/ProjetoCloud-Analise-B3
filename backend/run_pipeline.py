@@ -15,49 +15,49 @@ TODAY = datetime.now()
 
 def run_pipeline_for_date(date_str):
     """Executa o pipeline ETL completo para uma data específica"""
-    print(f"\n=== INICIANDO PIPELINE ETL B3 PARA {date_str} ===\n")
+    print(f"\n=== INICIANDO PIPELINE ETL B3 PARA {date_str} ===\n", flush=True)
     start_time = time.time()
     
     # Fase 1: Extração
-    print(f"--- FASE 1: EXTRAÇÃO ({date_str}) ---")
+    print(f"--- FASE 1: EXTRAÇÃO ({date_str}) ---", flush=True)
     extractor = B3Extractor()
     try:
         zip_bytes, ok_date = extractor.download_zip(date_str)
         if not zip_bytes:
-            print(f"[WARNING] Nenhum arquivo disponível para {date_str}")
+            print(f"[WARNING] Nenhum arquivo disponível para {date_str}", flush=True)
             return 0
             
         extraction_result = extractor.extract_files(zip_bytes, ok_date)
         if os.getenv("UPLOAD_TO_BLOB", "true").lower() == "true":
             extractor.upload_to_blob(extraction_result)
             
-        print(f"Extração concluída para {date_str}! {len(extraction_result['xml_files'])} arquivos XML extraídos.")
+        print(f"Extração concluída para {date_str}! {len(extraction_result['xml_files'])} arquivos XML extraídos.", flush=True)
         
         # Fase 2: Transformação
-        print(f"\n--- FASE 2: TRANSFORMAÇÃO ({date_str}) ---")
+        print(f"\n--- FASE 2: TRANSFORMAÇÃO ({date_str}) ---", flush=True)
         parser = B3XMLParser()
         xml_files = parser.list_xml_files(date_str)
         cotacoes = parser._process_date(date_str, xml_files)
-        print(f"Transformação concluída para {date_str}! {len(cotacoes)} cotações extraídas.")
+        print(f"Transformação concluída para {date_str}! {len(cotacoes)} cotações extraídas.", flush=True)
         
         # Fase 3: Carga
-        print(f"\n--- FASE 3: CARGA ({date_str}) ---")
+        print(f"\n--- FASE 3: CARGA ({date_str}) ---", flush=True)
         loader = PostgresLoader()
         total_loaded = loader.execute(cotacoes)
-        print(f"Carga concluída para {date_str}! {total_loaded} registros processados.")
+        print(f"Carga concluída para {date_str}! {total_loaded} registros processados.", flush=True)
         
         elapsed = time.time() - start_time
-        print(f"\n=== PIPELINE ETL B3 PARA {date_str} CONCLUÍDO EM {elapsed:.2f}s! ===\n")
+        print(f"\n=== PIPELINE ETL B3 PARA {date_str} CONCLUÍDO EM {elapsed:.2f}s! ===\n", flush=True)
         return total_loaded
     except Exception as e:
-        print(f"[ERROR] Falha no processamento para {date_str}: {str(e)}")
+        print(f"[ERROR] Falha no processamento para {date_str}: {str(e)}", flush=True)
         import traceback
         traceback.print_exc()
         return 0
 
 def run_pipeline():
     """Executa o pipeline ETL para um ou mais dias"""
-    print("=== INICIANDO PIPELINE ETL B3 ===")
+    print("=== INICIANDO PIPELINE ETL B3 ===", flush=True)
     start_time = time.time()
     total_records = 0
     days_processed = 0
@@ -73,7 +73,7 @@ def run_pipeline():
                 continue
             dates_to_process.append(yymmdd(dt))
             
-        print(f"[INFO] Modo multi-dia ativado. Processando {len(dates_to_process)} dias: {', '.join(dates_to_process)}")
+        print(f"[INFO] Modo multi-dia ativado. Processando {len(dates_to_process)} dias: {', '.join(dates_to_process)}", flush=True)
         
         for date_str in dates_to_process:
             records = run_pipeline_for_date(date_str)
@@ -99,10 +99,10 @@ def run_pipeline():
                 break
     
     elapsed = time.time() - start_time
-    print(f"\n=== PIPELINE ETL B3 CONCLUÍDO! ===")
-    print(f"Total de dias processados: {days_processed}")
-    print(f"Total de registros: {total_records}")
-    print(f"Tempo total de execução: {elapsed:.2f}s")
+    print(f"\n=== PIPELINE ETL B3 CONCLUÍDO! ===", flush=True)
+    print(f"Total de dias processados: {days_processed}", flush=True)
+    print(f"Total de registros: {total_records}", flush=True)
+    print(f"Tempo total de execução: {elapsed:.2f}s", flush=True)
 
 if __name__ == "__main__":
     run_pipeline()

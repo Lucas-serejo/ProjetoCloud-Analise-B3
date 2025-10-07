@@ -1,6 +1,8 @@
 # Use uma imagem base oficial do Python
 FROM python:3.12-slim
 
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
 # Instala o Poetry

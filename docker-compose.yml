@@ -2,7 +2,7 @@ services:
   etl:
     build:
       context: ./backend
-    command: sh -c "alembic upgrade head && python run_pipeline.py"
+    command: sh -c "alembic upgrade head && python -u run_pipeline.py"
     working_dir: /app
     depends_on:
       - azurite
