@@ -10,6 +10,7 @@ services:
     volumes:
       - ./backend:/app/
     environment:
+      - PYTHONUNBUFFERED=1
       - PATH_TO_SAVE=/app/dados_b3
       - AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;
       - AZURE_BLOB_CONTAINER=dados-pregao
@@ -19,7 +20,7 @@ services:
       - POSTGRES_DB=b3_data
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=password
-      - EXPORT_JSON=false
+      - EXPORT_JSON=true
       - MULTI_DAY_PROCESSING=false
       - MULTI_DAY_LIMIT=6
     restart: on-failure
@@ -44,6 +45,12 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data_volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d b3_data"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   pgadmin:
     image: dpage/pgadmin4
@@ -53,7 +60,8 @@ services:
     ports:
       - "5050:80"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     volumes:
       - pgadmin_data_volume:/var/lib/pgadmin
 
