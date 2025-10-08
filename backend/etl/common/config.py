@@ -22,3 +22,7 @@ class Config:
     
     # Configurações de exportação
     EXPORT_JSON = os.getenv("EXPORT_JSON", "false").lower() == "true"
+
+    # Novas configurações para processamento de múltiplos dias
+    MULTI_DAY_PROCESSING = os.getenv("MULTI_DAY_PROCESSING", "false").lower() == "true"
+    MULTI_DAY_LIMIT = int(os.getenv("MULTI_DAY_LIMIT", "5"))  # Número de dias úteis para processar

@@ -50,7 +50,7 @@ class B3XMLParser:
             cotacoes = []
             for i, report in enumerate(price_reports):
                 try:
-                    print(f"[DEBUG] Processando relatório {i+1}")
+                    # print(f"[DEBUG] Processando relatório {i+1}")
 
                     # Verifica se o ativo está presente, se sim extrai
                     ticker_node = report.xpath(".//*[local-name()='TckrSymb']")
@@ -64,9 +64,9 @@ class B3XMLParser:
                     market_code = market_code_node[0].text.strip() if market_code_node and market_code_node[0].text else ""
                     if market_code not in ["BVMF", "XBSP", "BOVESPA"]:
                         continue
-                    
-                    # Filtra ativos que não são ações ou ETFs
-                    if not (re.match(r'^[A-Z]{3,5}\d{1,2}$', ativo) or re.match(r'^[A-Z]{4,5}11$', ativo)):
+
+                    # Filtra ativos que não são ações ordinárias/preferenciais/fracionário
+                    if not re.match(r'^[A-Z]{4}\d{1,2}F?$', ativo):
                         continue
 
                     # Verifica se existem atributos financeiros
@@ -115,37 +115,64 @@ class B3XMLParser:
             return []
 
     # Executa o processo de extração e transformação
-    def execute(self, date_str=None):
-        # Se date_str não for fornecida, tenta encontrar a data mais recente com arquivos XML
-        if not date_str:
-            selected_date = None
-            xml_files = []
-            for i in range(0, 10):
-                dt = datetime.now() - timedelta(days=i)
-                if dt.weekday() >= 5:
-                    continue
-                candidate = yymmdd(dt)
-                files = self.list_xml_files(candidate)
-                if files:
-                    selected_date = candidate
-                    xml_files = files
-                    break
-            if not xml_files:
-                print("[ERROR] Nenhum arquivo XML encontrado nos últimos dias úteis. Saindo.")
-                return []
-            date_str = selected_date
-        # Se date_str for fornecida, lista arquivos XML para essa data
-        else:
-            xml_files = self.list_xml_files(date_str)
-            if not xml_files:
-                print(f"[INFO] Nenhum arquivo XML encontrado para {date_str}. Saindo.")
-                return []
-
-        print(f"[INFO] Encontrados {len(xml_files)} arquivos XML com prefixo 'xml/{date_str}/'")
-
+    def execute(self, multi_day=False, days_limit=5):
+        """
+        Executa o processo de extração e transformação.
+        
+        Args:
+            multi_day (bool): Se True, processa dados de múltiplos dias
+            days_limit (int): Número máximo de dias úteis a processar
+        """
         all_cotacoes = []
+        days_processed = 0
+        
+        # Lista de dias úteis a processar
+        dates_to_process = []
+        today = datetime.now().date()
+        
+        for i in range(0, days_limit):
+            dt = (datetime.now() - timedelta(days=i)).date()
+            
+            if dt > today:
+                continue
 
-        # Processa cada arquivo XML
+            if dt.weekday() >= 5:
+                continue
+                
+            dates_to_process.append(yymmdd(datetime.combine(dt, datetime.min.time())))
+        
+        # Se não estiver em modo multi-dia, processar apenas um dia
+        if not multi_day:
+            for date_str in dates_to_process:
+                xml_files = self.list_xml_files(date_str)
+                if xml_files:
+                    cotacoes = self._process_date(date_str, xml_files)
+                    all_cotacoes.extend(cotacoes)
+                    break
+        
+        # Se estiver em modo multi-dia, processar múltiplos dias
+        else:
+            for date_str in dates_to_process:
+                xml_files = self.list_xml_files(date_str)
+                if not xml_files:
+                    print(f"[INFO] Nenhum arquivo XML encontrado para {date_str}")
+                    continue
+                    
+                print(f"[INFO] Processando dia: {date_str}")
+                cotacoes = self._process_date(date_str, xml_files)
+                all_cotacoes.extend(cotacoes)
+                days_processed += 1
+        
+        print(f"[INFO] Total de {days_processed} dias processados")
+        print(f"[INFO] Total de {len(all_cotacoes)} cotações extraídas")
+        
+        return all_cotacoes
+
+    # Método auxiliar para processar uma data específica
+    def _process_date(self, date_str, xml_files):
+        """Processa todos os arquivos XML para uma data específica."""
+        date_cotacoes = []
+        
         for xml_file in xml_files:
             print(f"[INFO] Processando {xml_file}...")
             xml_content = self.download_xml(xml_file)
@@ -154,22 +181,20 @@ class B3XMLParser:
                 continue
 
             cotacoes = self.parse_xml(xml_content)
-            # Verifica se as cotações foram extraídas com sucesso
             if cotacoes:
-                all_cotacoes.extend(cotacoes)
+                date_cotacoes.extend(cotacoes)
                 print(f"[OK] Extraídas {len(cotacoes)} cotações de {xml_file}")
             else:
                 print(f"[WARNING] Nenhuma cotação válida extraída de {xml_file}")
-
-        print(f"[INFO] Total de cotações extraídas: {len(all_cotacoes)}")
         
-        if all_cotacoes and Config.EXPORT_JSON:
+        # Exportar para JSON se configurado
+        if date_cotacoes and Config.EXPORT_JSON:
             json_path = Config.DATA_DIR / f"cotacoes_{date_str}.json"
             with open(json_path, "w", encoding="utf-8") as f:
-                json.dump(all_cotacoes, f, ensure_ascii=False, default=str, indent=2)
+                json.dump(date_cotacoes, f, ensure_ascii=False, default=str, indent=2)
             print(f"[INFO] Cotações exportadas para JSON: {json_path}")
             
-        return all_cotacoes
+        return date_cotacoes
 
 def run():
     parser = B3XMLParser()

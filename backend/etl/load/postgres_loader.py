@@ -1,6 +1,7 @@
 from etl.common.config import Config
 import psycopg2
 from datetime import datetime
+from etl.transform.xml_parse import run as transform_run
 
 class PostgresLoader:
     def __init__(self):
@@ -111,14 +112,12 @@ class PostgresLoader:
         finally:
             self.disconnect()
 
-def run(cotacoes=None):
-    from etl.transform.xml_parse import run as transform_run
-    
+def run(cotacoes=None): 
     if cotacoes is None:
         cotacoes = transform_run()
         
     loader = PostgresLoader()
     return loader.execute(cotacoes)
 
-if __name__ == "_main_":
+if __name__ == "__main__":
     run()
