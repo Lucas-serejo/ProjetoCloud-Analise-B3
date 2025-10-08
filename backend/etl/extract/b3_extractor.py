@@ -143,7 +143,7 @@ class B3Extractor:
                 result = self.extract_files(zip_bytes, ok_date)
                 
                 # Upload para o blob storage
-                if os.getenv("UPLOAD_TO_BLOB", "true").lower() == "true":
+                if Config.UPLOAD_TO_BLOB:
                     self.upload_to_blob(result)
                     
                 results.append(result)
