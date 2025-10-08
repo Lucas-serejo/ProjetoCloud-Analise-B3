@@ -5,8 +5,10 @@ services:
     command: sh -c "alembic upgrade head && python -u run_pipeline.py"
     working_dir: /app
     depends_on:
-      - azurite
-      - postgres
+      postgres:
+        condition: service_healthy
+      azurite:
+        condition: service_started
     volumes:
       - ./backend:/app/
     environment:
