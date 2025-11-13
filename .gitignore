@@ -161,6 +161,11 @@ functions-etl/test_loader.py
 functions-etl/test_pipeline.py
 functions-etl/check_fracionarios.py
 
+# Dados temporários locais (XMLs e ZIPs baixados)
+dados_b3/
+functions-etl/dados_b3/
+backend/dados_b3/
+
 # Spyder project settings
 .spyderproject
 .spyproject

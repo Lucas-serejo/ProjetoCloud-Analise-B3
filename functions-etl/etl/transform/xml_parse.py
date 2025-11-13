@@ -67,7 +67,8 @@ class B3XMLParser:
 
                     # Filtra ativos que não são ações ordinárias/preferenciais
                     # EXCLUI mercado fracionário (ações terminadas em F)
-                    if not re.match(r'^[A-Z]{4}\d{1,2}$', ativo):
+                    # Aceita: 3-5 letras + 1-2 dígitos (ex: GOL3, PETR4, BBAS3)
+                    if not re.match(r'^[A-Z]{3,5}\d{1,2}$', ativo):
                         continue
 
                     # Verifica se existem atributos financeiros

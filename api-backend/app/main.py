@@ -28,50 +28,37 @@ app.add_middleware(
 )
 
 
-@app.get("/api/cotacoes/{ticker}")
-def buscar_cotacoes(
-    ticker: str,
-    limit: int = Query(10, ge=1, le=365, description="Quantidade de registros"),
-    data_inicio: Optional[date] = Query(None, description="Data inicial (YYYY-MM-DD)"),
-    data_fim: Optional[date] = Query(None, description="Data final (YYYY-MM-DD)")
+@app.get("/api/cotacoes/{codigo_ativo}")
+def buscar_historico_ativo(
+    codigo_ativo: str,
+    limite: int = Query(10, ge=1, le=100, description="Quantidade de registros (máx: 100)")
 ):
     """
-    Busca histórico de cotações de um ativo
+    Retorna histórico de cotações de um ativo específico.
     
-    - **ticker**: Código do ativo (ex: PETR4, VALE3)
-    - **limit**: Máximo de registros (padrão: 10)
-    - **data_inicio**: Filtro data inicial (opcional)
-    - **data_fim**: Filtro data final (opcional)
+    - **codigo_ativo**: Código do ativo na B3 (ex: PETR4, VALE3, ITUB4, BBAS3)
+    - **limite**: Quantidade de registros mais recentes (padrão: 10, máximo: 100)
+    
+    Exemplo: /api/cotacoes/PETR4?limite=20
     """
     try:
-        # Monta query com filtros opcionais
         query = """
             SELECT ativo, data_pregao, abertura, fechamento, maximo, minimo, volume
             FROM cotacoes
             WHERE ativo = %s
+            ORDER BY data_pregao DESC
+            LIMIT %s
         """
-        params = [ticker.upper()]
-        
-        if data_inicio:
-            query += " AND data_pregao >= %s"
-            params.append(data_inicio)
-        
-        if data_fim:
-            query += " AND data_pregao <= %s"
-            params.append(data_fim)
-        
-        query += " ORDER BY data_pregao DESC LIMIT %s"
-        params.append(limit)
         
         with get_db() as conn:
             with conn.cursor() as cur:
-                cur.execute(query, params)
+                cur.execute(query, (codigo_ativo.upper(), limite))
                 rows = cur.fetchall()
                 
                 if not rows:
                     raise HTTPException(
                         status_code=404,
-                        detail=f"Nenhuma cotação encontrada para {ticker.upper()}"
+                        detail=f"Nenhuma cotação encontrada para {codigo_ativo.upper()}"
                     )
                 
                 cotacoes = [
@@ -88,7 +75,7 @@ def buscar_cotacoes(
                 ]
                 
                 return {
-                    "ticker": ticker.upper(),
+                    "ativo": codigo_ativo.upper(),
                     "total": len(cotacoes),
                     "dados": cotacoes
                 }
@@ -99,9 +86,15 @@ def buscar_cotacoes(
         raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
 
 
-@app.get("/api/cotacoes/{ticker}/latest")
-def cotacao_mais_recente(ticker: str):
-    """Retorna a cotação mais recente de um ativo"""
+@app.get("/api/cotacoes/{codigo_ativo}/latest")
+def cotacao_mais_recente(codigo_ativo: str):
+    """
+    Retorna a cotação mais recente de um ativo específico.
+    
+    - **codigo_ativo**: Código do ativo na B3 (ex: PETR4, VALE3, ITUB4, BBAS3)
+    
+    Exemplo: /api/cotacoes/PETR4/latest
+    """
     try:
         query = """
             SELECT ativo, data_pregao, abertura, fechamento, maximo, minimo, volume
@@ -113,13 +106,13 @@ def cotacao_mais_recente(ticker: str):
         
         with get_db() as conn:
             with conn.cursor() as cur:
-                cur.execute(query, (ticker.upper(),))
+                cur.execute(query, (codigo_ativo.upper(),))
                 row = cur.fetchone()
                 
                 if not row:
                     raise HTTPException(
                         status_code=404,
-                        detail=f"Ativo {ticker.upper()} não encontrado"
+                        detail=f"Ativo {codigo_ativo.upper()} não encontrado"
                     )
                 
                 return {
