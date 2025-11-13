@@ -1,0 +1,5 @@
+azure-functions
+requests
+lxml
+psycopg2-binary
+azure-storage-blob
