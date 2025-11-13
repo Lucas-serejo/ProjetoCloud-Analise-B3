@@ -154,6 +154,13 @@ __azurite_db*__.json
 bin/
 obj/
 
+# Testes opcionais (para debugging local)
+functions-etl/test_extractor.py
+functions-etl/test_parser.py
+functions-etl/test_loader.py
+functions-etl/test_pipeline.py
+functions-etl/check_fracionarios.py
+
 # Spyder project settings
 .spyderproject
 .spyproject

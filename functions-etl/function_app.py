@@ -2,117 +2,146 @@ import logging
 import azure.functions as func
 import io
 import zipfile
-import datetime
+from datetime import datetime, timedelta
 
-# --- Importações da nossa lógica de negócio (da pasta 'etl' que copiámos) ---
+# Importações da lógica ETL
 from etl.extract.b3_extractor import B3Extractor
 from etl.common.storage import get_container_client
 from etl.common.helpers import yymmdd
 from etl.transform.xml_parse import B3XMLParser
 from etl.load.postgres_loader import PostgresLoader
-# ---
 
-# Inicializa a aplicação de funções (como o seu ficheiro já tinha)
+# Configura logging
+logging.basicConfig(level=logging.INFO)
+
+# Inicializa a aplicação de funções
 app = func.FunctionApp()
 
 #================================================================================
-# FUNÇÃO 1: Extração (Timer Trigger)
+# FUNÇÃO 1: Extração (Timer Trigger) - Executa diariamente às 19h (horário Brasília)
 #================================================================================
-@app.timer_trigger(schedule="0 0 21 * * 1-5", arg_name="mytimer", run_on_startup=False) 
-    # NOTA: "0 0 21 * * 1-5" = 21:00 UTC, de Segunda a Sexta.
-    # Para testar, pode usar: "0 */5 * * * *" (a cada 5 minutos)
+@app.timer_trigger(schedule="0 0 22 * * 1-5", arg_name="mytimer", run_on_startup=False,
+                   use_monitor=True) 
+# NOTA: "0 0 22 * * 1-5" = 22:00 UTC (19h Brasília), Segunda a Sexta
+# Para testar localmente: "0 */5 * * * *" (a cada 5 minutos)
 def ExtractorTimer(mytimer: func.TimerRequest) -> None:
-    
+    """
+    Timer Trigger que baixa arquivos da B3 diariamente e faz upload para o Blob Storage.
+    """
     if mytimer.past_due:
-        logging.info('A função ExtractorTimer está a ser executada depois do esperado.')
+        logging.warning('Timer está executando com atraso.')
 
-    logging.info('Função ExtractorTimer iniciada.')
+    logging.info('=== INICIANDO FUNÇÃO ExtractorTimer ===')
 
     try:
         extractor = B3Extractor()
         
-        # 1. Tentar baixar os dados do dia útil mais recente
+        # Tenta baixar os dados do dia útil mais recente (até 5 dias atrás)
         zip_bytes = None
         date_str = None
-        for dt in extractor.iter_uteis_ate(max_days=5):
+        
+        logging.info('Procurando arquivo da B3 nos últimos dias úteis...')
+        for dt in iter_uteis_ate(max_days=5):
             ds = yymmdd(dt)
+            logging.info(f"Tentando baixar para data: {ds}")
             content, ok_date = extractor.download_zip(ds)
             if content:
                 zip_bytes = content
                 date_str = ok_date
-                logging.info(f"Sucesso ao baixar o ZIP para a data: {date_str}")
+                logging.info(f"✅ Arquivo baixado com sucesso para: {date_str}")
                 break
+            else:
+                logging.info(f"Arquivo não disponível para {ds}")
         
         if not zip_bytes:
-            logging.warning("Nenhum ficheiro ZIP encontrado nos últimos 5 dias úteis.")
+            logging.error("❌ Nenhum arquivo encontrado nos últimos 5 dias úteis.")
             return
 
-        # 2. Extrair XMLs do ZIP e fazer o upload para o Blob Storage
+        # Extrai XMLs do ZIP e faz upload para o Blob Storage
         container_client = get_container_client()
         
+        logging.info('Extraindo arquivos do ZIP...')
         with zipfile.ZipFile(io.BytesIO(zip_bytes), "r") as zf1:
-            inner_zip_name = zf1.namelist()[0] # Ex: SPRE{date_str}.zip
+            # Primeira camada do ZIP
+            inner_zip_name = zf1.namelist()[0]
             inner_zip_bytes = zf1.read(inner_zip_name)
             
+            # Segunda camada (arquivos XML)
             with zipfile.ZipFile(io.BytesIO(inner_zip_bytes), "r") as zf2:
                 xml_files = [f for f in zf2.namelist() if f.endswith('.xml')]
-                logging.info(f"Encontrados {len(xml_files)} ficheiros XML dentro do ZIP.")
+                logging.info(f"Encontrados {len(xml_files)} arquivos XML")
                 
+                uploaded = 0
                 for xml_file_name in xml_files:
                     xml_content = zf2.read(xml_file_name)
-                    
-                    # Definir o nome do blob (ex: xml/251112/SPRE251112_001.xml)
                     blob_name = f"xml/{date_str}/{xml_file_name}"
                     
                     try:
                         blob_client = container_client.get_blob_client(blob_name)
                         blob_client.upload_blob(xml_content, overwrite=True)
-                        logging.info(f"Upload do ficheiro {blob_name} concluído.")
+                        uploaded += 1
+                        logging.info(f"✅ Upload: {blob_name}")
                     except Exception as e:
-                        logging.error(f"Falha no upload do {blob_name}: {e}")
+                        logging.error(f"❌ Falha no upload {blob_name}: {e}")
         
-        logging.info('Função ExtractorTimer concluída com sucesso.')
+        logging.info(f'=== EXTRAÇÃO CONCLUÍDA: {uploaded}/{len(xml_files)} arquivos enviados ===')
 
     except Exception as e:
-        logging.error(f"Erro fatal na ExtractorTimer: {e}")
+        logging.error(f"❌ ERRO FATAL na ExtractorTimer: {e}")
         import traceback
-        traceback.print_exc()
+        logging.error(traceback.format_exc())
+
+
+# Função auxiliar para gerar dias úteis
+def iter_uteis_ate(max_days: int = 10, base: datetime = None):
+    """Gera datas em ordem decrescente, apenas dias úteis (seg-sex)."""
+    if base is None:
+        base = datetime.now()
+    for i in range(max_days):
+        dt = base - timedelta(days=i)
+        if dt.weekday() < 5:  # 0=seg, 4=sex
+            yield dt
 
 
 #================================================================================
-# FUNÇÃO 2: Carga (Blob Trigger)
+# FUNÇÃO 2: Carga (Blob Trigger) - Processa XMLs quando são criados no Blob
 #================================================================================
 @app.blob_trigger(arg_name="myblob", 
-                  path="dados-pregao/xml/{name}.xml",
+                  path="dados-pregao/xml/{date}/{name}.xml",
                   connection="AzureWebJobsStorage") 
 def LoaderBlobTrigger(myblob: func.InputStream):
-    
-    logging.info(f"Função LoaderBlobTrigger processando o blob: {myblob.name}")
+    """
+    Blob Trigger que processa arquivos XML quando são adicionados ao Blob Storage.
+    Extrai cotações e carrega no PostgreSQL.
+    """
+    logging.info(f'=== INICIANDO PROCESSAMENTO DO BLOB: {myblob.name} ===')
     
     try:
-        # O myblob.read() dá-nos o conteúdo do ficheiro
+        # Lê o conteúdo do arquivo XML
         xml_content = myblob.read()
         if not xml_content:
-            logging.warning(f"Blob {myblob.name} está vazio.")
+            logging.warning(f"⚠️ Blob vazio: {myblob.name}")
             return
 
-        # 1. Fazer o Parse do XML
+        logging.info(f"Tamanho do arquivo: {len(xml_content)} bytes")
+
+        # Parse do XML para extrair cotações
         parser = B3XMLParser()
         cotacoes = parser.parse_xml(xml_content)
         
         if not cotacoes:
-            logging.warning(f"Nenhuma cotação válida encontrada em {myblob.name}")
+            logging.warning(f"⚠️ Nenhuma cotação válida encontrada em {myblob.name}")
             return
             
-        logging.info(f"Extraídas {len(cotacoes)} cotações de {myblob.name}")
+        logging.info(f"✅ Extraídas {len(cotacoes)} cotações válidas")
 
-        # 2. Carregar no Banco de Dados
+        # Carrega no PostgreSQL
         loader = PostgresLoader()
         total_loaded = loader.execute(cotacoes)
         
-        logging.info(f"Carga concluída! {total_loaded} registos processados.")
+        logging.info(f'=== CARGA CONCLUÍDA: {total_loaded} registros processados ===')
 
     except Exception as e:
-        logging.error(f"Erro fatal no processamento do {myblob.name}: {e}")
+        logging.error(f"❌ ERRO FATAL no processamento de {myblob.name}: {e}")
         import traceback
-        traceback.print_exc()
+        logging.error(traceback.format_exc())

@@ -65,8 +65,9 @@ class B3XMLParser:
                     if market_code not in ["BVMF", "XBSP", "BOVESPA"]:
                         continue
 
-                    # Filtra ativos que não são ações ordinárias/preferenciais/fracionário
-                    if not re.match(r'^[A-Z]{4}\d{1,2}F?$', ativo):
+                    # Filtra ativos que não são ações ordinárias/preferenciais
+                    # EXCLUI mercado fracionário (ações terminadas em F)
+                    if not re.match(r'^[A-Z]{4}\d{1,2}$', ativo):
                         continue
 
                     # Verifica se existem atributos financeiros
