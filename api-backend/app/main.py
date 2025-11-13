@@ -28,29 +28,6 @@ app.add_middleware(
 )
 
 
-@app.get("/")
-def root():
-    """Página inicial"""
-    return {
-        "message": "B3 Cotações API",
-        "docs": "/docs",
-        "version": "1.0.0"
-    }
-
-
-@app.get("/health")
-def health_check():
-    """Verifica status da API e banco"""
-    try:
-        with get_db() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT 1")
-                cur.fetchone()
-        return {"status": "healthy", "database": "connected"}
-    except Exception as e:
-        return {"status": "unhealthy", "database": str(e)}
-
-
 @app.get("/api/cotacoes/{ticker}")
 def buscar_cotacoes(
     ticker: str,
@@ -177,5 +154,96 @@ def listar_ativos():
                     "ativos": ativos
                 }
     
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
+
+
+@app.get("/api/cotacoes")
+def listar_cotacoes_sem_parametros():
+    """
+    Retorna TODAS as cotações da base (sem parâmetros).
+    Atenção: pode ser pesado conforme a base cresce.
+    """
+    try:
+        query = """
+            SELECT ativo, data_pregao, abertura, fechamento, maximo, minimo, volume
+            FROM cotacoes
+            ORDER BY data_pregao DESC, ativo
+        """
+
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query)
+                rows = cur.fetchall()
+
+                if not rows:
+                    raise HTTPException(status_code=404, detail="Nenhuma cotação encontrada")
+
+                cotacoes = [
+                    {
+                        "ativo": r[0],
+                        "data_pregao": r[1],
+                        "abertura": float(r[2]),
+                        "fechamento": float(r[3]),
+                        "maximo": float(r[4]),
+                        "minimo": float(r[5]),
+                        "volume": r[6]
+                    }
+                    for r in rows
+                ]
+
+                return {
+                    "total": len(cotacoes),
+                    "dados": cotacoes
+                }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
+
+
+@app.get("/api/cotacoes/data/{data}")
+def listar_cotacoes_por_data(data: date):
+    """
+    Retorna cotações de uma data específica (sem query params).
+    """
+    try:
+        query = """
+            SELECT ativo, data_pregao, abertura, fechamento, maximo, minimo, volume
+            FROM cotacoes
+            WHERE data_pregao = %s
+            ORDER BY ativo
+        """
+
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, (data,))
+                rows = cur.fetchall()
+
+                if not rows:
+                    raise HTTPException(status_code=404, detail=f"Nenhuma cotação encontrada para a data {data}")
+
+                cotacoes = [
+                    {
+                        "ativo": r[0],
+                        "data_pregao": r[1],
+                        "abertura": float(r[2]),
+                        "fechamento": float(r[3]),
+                        "maximo": float(r[4]),
+                        "minimo": float(r[5]),
+                        "volume": r[6]
+                    }
+                    for r in rows
+                ]
+
+                return {
+                    "total": len(cotacoes),
+                    "data": str(data),
+                    "dados": cotacoes
+                }
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")

@@ -14,7 +14,7 @@ pip install -r requirements.txt
 
 ```bash
 cp .env.example .env
-# Edite o .env com suas configurações
+
 ```
 
 ### 3. Rodar migrações do banco
@@ -38,8 +38,8 @@ Acesse: http://localhost:8000/docs
 
 ## 📚 Endpoints
 
-- `GET /` - Página inicial
-- `GET /health` - Status da API
+- `GET /api/cotacoes` - Todas as cotações (sem parâmetros)
+- `GET /api/cotacoes/data/{data}` - Cotações de um dia específico (YYYY-MM-DD)
 - `GET /api/cotacoes/{ticker}` - Histórico de cotações
 - `GET /api/cotacoes/{ticker}/latest` - Última cotação
 - `GET /api/ativos` - Lista de ativos disponíveis
@@ -100,15 +100,20 @@ POSTGRES_PASSWORD=sua_senha
 ## 📝 Exemplos
 
 ```bash
+# Todas as cotações (sem parâmetros)
+curl http://localhost:8000/api/cotacoes
+
+# Cotações por data (YYYY-MM-DD)
+curl http://localhost:8000/api/cotacoes/data/2025-11-13
+
 # Últimas 10 cotações da PETR4
 curl http://localhost:8000/api/cotacoes/PETR4
 
 # Última cotação da VALE3
 curl http://localhost:8000/api/cotacoes/VALE3/latest
 
-# Buscar com filtro de data
-curl "http://localhost:8000/api/cotacoes/ITUB4?data_inicio=2024-01-01&limit=30"
-
 # Listar todos os ativos
 curl http://localhost:8000/api/ativos
 ```
+
+> Nota: o endpoint `GET /api/cotacoes` retorna toda a base e pode ser pesado conforme os dados crescem. Use o endpoint por data quando possível.
