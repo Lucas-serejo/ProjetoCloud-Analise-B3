@@ -1,7 +1,14 @@
 import os
 import psycopg2
 from fastapi import FastAPI, HTTPException
-from etl.common.config import Config  # Reutilizamos sua configuração
+
+# Substitui o import não resolvido por uma configuração local que usa variáveis de ambiente.
+class Config:
+    POSTGRES_HOST = os.environ.get("POSTGRES_HOST", "localhost")
+    POSTGRES_PORT = os.environ.get("POSTGRES_PORT", "5432")
+    POSTGRES_DB = os.environ.get("POSTGRES_DB", "postgres")
+    POSTGRES_USER = os.environ.get("POSTGRES_USER", "postgres")
+    POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "")
 
 app = FastAPI()
 
