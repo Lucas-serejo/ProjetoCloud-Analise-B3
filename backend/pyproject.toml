@@ -13,6 +13,8 @@ psycopg2-binary = "^2.9.9"
 lxml = "^6.0.2"
 alembic = "^1.13.2"
 sqlalchemy = "^2.0.31"
+fastapi = "^0.121.1"
+uvicorn = "^0.38.0"
 
 
 [build-system]
