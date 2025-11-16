@@ -63,8 +63,8 @@ class B3XMLParser:
                     if market_code not in ["BVMF", "XBSP", "BOVESPA"]:
                         continue
 
-                    # Filtra apenas ações à vista: 3-5 letras + 1-2 dígitos
-                    if not re.match(r'^[A-Z]{3,5}\d{1,2}$', ativo):
+                    # Filtra apenas ações à vista 
+                    if not re.match(r'^[A-Z]{4}\d{1,2}$', ativo):
                         continue
 
                     # Atributos financeiros
