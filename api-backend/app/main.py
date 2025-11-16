@@ -27,6 +27,40 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/api/cotacoes/datas")
+def listar_datas_disponiveis():
+    """Retorna as datas disponíveis (distintas) com cotações, em ordem crescente."""
+    try:
+        query = """
+            SELECT data_pregao::date AS data, COUNT(*) AS total
+            FROM cotacoes
+            GROUP BY data_pregao
+            ORDER BY data_pregao ASC
+        """
+
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query)
+                rows = cur.fetchall()
+
+                if not rows:
+                    raise HTTPException(status_code=404, detail="Nenhuma data encontrada")
+
+                datas = [
+                    {"data": r[0], "total": r[1]}
+                    for r in rows
+                ]
+
+                return {
+                    "total_dias": len(datas),
+                    "datas": datas
+                }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
+
 
 @app.get("/api/cotacoes/{codigo_ativo}")
 def buscar_historico_ativo(
@@ -234,6 +268,53 @@ def listar_cotacoes_por_data(data: date):
                     "total": len(cotacoes),
                     "data": str(data),
                     "dados": cotacoes
+                }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
+
+
+@app.get("/api/ativos/intervalo")
+def listar_ativos_por_intervalo(
+    inicio: date = Query(..., description="Data inicial (YYYY-MM-DD)"),
+    fim: date = Query(..., description="Data final (YYYY-MM-DD)")
+):
+    """
+    Lista os ativos que possuem cotações no intervalo de datas informado (inclusive),
+    com a quantidade de registros por ativo. Ordenado por quantidade decrescente.
+    """
+    try:
+        if fim < inicio:
+            raise HTTPException(status_code=400, detail="A data final deve ser maior ou igual à inicial")
+
+        query = """
+            SELECT ativo, COUNT(*) AS total
+            FROM cotacoes
+            WHERE data_pregao BETWEEN %s AND %s
+            GROUP BY ativo
+            ORDER BY total DESC, ativo ASC
+        """
+
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, (inicio, fim))
+                rows = cur.fetchall()
+
+                if not rows:
+                    raise HTTPException(status_code=404, detail="Nenhum ativo encontrado no intervalo informado")
+
+                ativos = [
+                    {"ativo": r[0], "total": r[1]} for r in rows
+                ]
+
+                return {
+                    "inicio": str(inicio),
+                    "fim": str(fim),
+                    "total_ativos": len(ativos),
+                    "total_registros": int(sum(r[1] for r in rows)),
+                    "ativos": ativos
                 }
 
     except HTTPException:

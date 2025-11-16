@@ -8,6 +8,14 @@ class PostgresLoader:
         self.conn = None
         self.cursor = None
     
+    def load_cotacoes(self, cotacoes):
+        """Alias para o método execute() para compatibilidade"""
+        return self.execute(cotacoes)
+    
+    def close(self):
+        """Alias para o método disconnect() para compatibilidade"""
+        self.disconnect()
+    
     def connect(self, max_retries=5, retry_interval=2):
         # Estabelece a conexão com o banco de dados PostgreSQL
         import time
@@ -41,6 +49,22 @@ class PostgresLoader:
             self.cursor.close()
         if self.conn:
             self.conn.close()
+    
+    def truncate_table(self):
+        """Limpa todos os registros da tabela cotacoes"""
+        try:
+            if not self.conn or self.conn.closed:
+                self.connect()
+            
+            self.cursor.execute("TRUNCATE TABLE cotacoes RESTART IDENTITY CASCADE")
+            self.conn.commit()
+            print("[INFO] Tabela 'cotacoes' esvaziada com sucesso")
+            return True
+        except Exception as e:
+            if self.conn:
+                self.conn.rollback()
+            print(f"[ERROR] Falha ao esvaziar tabela: {str(e)}")
+            raise
     
     def execute(self, cotacoes):
         # Insere as cotações no banco de dados

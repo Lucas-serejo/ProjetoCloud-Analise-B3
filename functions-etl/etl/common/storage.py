@@ -1,4 +1,4 @@
-from azure.storage.blob import BlobServiceClient, PublicAccess
+from azure.storage.blob import BlobServiceClient, PublicAccess, ContentSettings
 from azure.core.exceptions import ResourceExistsError
 from pathlib import Path
 from etl.common.config import Config
@@ -19,16 +19,40 @@ def get_container_client(container_name=None):
         pass
     return container_client
 
-def upload_blob(container_client, blob_name, local_path):
-    # Faz upload de um arquivo local para o blob storage.
+def upload_blob(container_client, blob_name, local_path, *, max_concurrency: int = 8, content_type: str | None = None, skip_if_exists: bool = False):
+    # Faz upload de um arquivo local para o blob storage com paralelismo opcional.
     path = Path(local_path)
     try:
+        blob_client = container_client.get_blob_client(blob_name)
+
+        if skip_if_exists:
+            try:
+                if blob_client.exists():
+                    print(f"[SKIP] Blob já existe: '{blob_name}'")
+                    return True
+            except Exception:
+                # Em caso de erro ao checar existência, segue com upload
+                pass
+
+        settings = ContentSettings(content_type=content_type) if content_type else None
+
         with open(path, "rb") as data:
-            container_client.upload_blob(name=blob_name, data=data, overwrite=True)
+            blob_client.upload_blob(
+                data=data,
+                overwrite=True,
+                max_concurrency=max_concurrency,
+                content_settings=settings,
+            )
         print(f"[OK] Arquivo '{blob_name}' enviado para o blob storage")
         return True
     except Exception as e:
         print(f"[ERROR] Falha ao enviar arquivo '{path}': {e}")
+        return False
+
+def blob_exists(container_client, blob_name: str) -> bool:
+    try:
+        return container_client.get_blob_client(blob_name).exists()
+    except Exception:
         return False
 
 def download_blob_to_string(container_client, blob_name):

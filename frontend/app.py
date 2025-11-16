@@ -21,7 +21,12 @@ st.markdown("---")
 st.sidebar.title("Menu")
 opcao = st.sidebar.radio(
     "Selecione uma opção:",
-    ["📅 Cotações do Dia", "🔍 Buscar Ativo", "📈 Ativos Disponíveis"]
+    [
+        "📅 Cotações do Dia",
+        "🔍 Buscar Ativo",
+        "📈 Ativos Disponíveis",
+        "🗓️ Ativos por Intervalo"
+    ]
 )
 
 # ============================================================================
@@ -29,14 +34,40 @@ opcao = st.sidebar.radio(
 # ============================================================================
 if opcao == "📅 Cotações do Dia":
     st.header("📅 Cotações do Dia")
-    
-    # Seletor de data
-    data_selecionada = st.date_input(
-        "Selecione a data:",
-        value=date.today() - timedelta(days=1),  # Ontem por padrão
-        max_value=date.today()
-    )
-    
+
+    # Carregar datas disponíveis da API
+    datas_disponiveis = []
+    try:
+        resp_datas = requests.get(f"{API_URL}/api/cotacoes/datas", timeout=20)
+        if resp_datas.status_code == 200:
+            payload = resp_datas.json()
+            # Lista de strings ISO das datas
+            datas_disponiveis = [str(item["data"]) for item in payload.get("datas", [])]
+        elif resp_datas.status_code == 404:
+            st.warning("Nenhuma data disponível encontrada na API.")
+        else:
+            st.error(f"Erro carregando datas: {resp_datas.status_code}")
+    except requests.exceptions.ConnectionError:
+        st.error("❌ Não foi possível conectar à API para listar as datas.")
+    except Exception as e:
+        st.error(f"❌ Erro ao carregar datas: {e}")
+
+    # Seletor de data baseado no que existe no banco
+    if datas_disponiveis:
+        default_idx = len(datas_disponiveis) - 1  # última data por padrão
+        data_selecionada = st.selectbox(
+            "Selecione a data disponível:",
+            options=datas_disponiveis,
+            index=default_idx
+        )
+    else:
+        # fallback se não conseguiu carregar datas
+        data_selecionada = st.date_input(
+            "Selecione a data:",
+            value=date.today() - timedelta(days=1),
+            max_value=date.today()
+        ).isoformat()
+
     if st.button("Buscar Cotações", type="primary"):
         with st.spinner("Buscando cotações..."):
             try:
@@ -219,6 +250,82 @@ elif opcao == "📈 Ativos Disponíveis":
                 st.error("❌ Não foi possível conectar à API. Certifique-se de que ela está rodando em http://localhost:8000")
             except Exception as e:
                 st.error(f"❌ Erro: {str(e)}")
+
+# ============================================================================
+# OPÇÃO 4: Ativos por Intervalo de Datas
+# ============================================================================
+elif opcao == "🗓️ Ativos por Intervalo":
+    st.header("🗓️ Ativos por Intervalo de Datas")
+
+    # Carregar datas disponíveis para limitar o range
+    datas_disponiveis = []
+    try:
+        resp_datas = requests.get(f"{API_URL}/api/cotacoes/datas", timeout=20)
+        if resp_datas.status_code == 200:
+            payload = resp_datas.json()
+            datas_disponiveis = [str(item["data"]) for item in payload.get("datas", [])]
+        elif resp_datas.status_code == 404:
+            st.warning("Nenhuma data disponível encontrada na API.")
+        else:
+            st.error(f"Erro carregando datas: {resp_datas.status_code}")
+    except Exception as e:
+        st.error(f"Erro ao carregar datas: {e}")
+
+    if not datas_disponiveis:
+        st.info("Carregue dados primeiro para habilitar essa consulta.")
+    else:
+        col1, col2 = st.columns(2)
+        with col1:
+            idx_inicio = max(len(datas_disponiveis) - 5, 0)
+            data_inicio = st.selectbox(
+                "Data inicial:", options=datas_disponiveis, index=idx_inicio
+            )
+        with col2:
+            data_fim = st.selectbox(
+                "Data final:", options=datas_disponiveis, index=len(datas_disponiveis) - 1
+            )
+
+        if data_fim < data_inicio:
+            st.warning("A data final deve ser maior ou igual à inicial.")
+        else:
+            if st.button("Buscar Ativos", type="primary"):
+                with st.spinner("Consultando ativos no intervalo..."):
+                    try:
+                        url = f"{API_URL}/api/ativos/intervalo?inicio={data_inicio}&fim={data_fim}"
+                        r = requests.get(url, timeout=60)
+                        if r.status_code == 200:
+                            payload = r.json()
+
+                            col1, col2, col3 = st.columns(3)
+                            col1.metric("Ativos distintos", payload.get("total_ativos", 0))
+                            col2.metric("Registros no intervalo", payload.get("total_registros", 0))
+                            col3.markdown(
+                                f"<div style='font-size:0.9rem; color:gray; line-height:1.2'><b>Período</b><br>{payload.get('inicio')} → {payload.get('fim')}</div>",
+                                unsafe_allow_html=True
+                            )
+
+                            dados = payload.get("ativos", [])
+                            if dados:
+                                df = pd.DataFrame(dados)
+                                df = df.rename(columns={"ativo": "Ativo", "total": "Qtde Registros"})
+                                df = df.sort_values("Qtde Registros", ascending=False)
+                                st.dataframe(df, use_container_width=True, height=420)
+
+                                csv = df.to_csv(index=False).encode("utf-8")
+                                st.download_button(
+                                    label="📥 Baixar CSV",
+                                    data=csv,
+                                    file_name=f"ativos_intervalo_{data_inicio}_a_{data_fim}.csv",
+                                    mime="text/csv"
+                                )
+                        elif r.status_code == 404:
+                            st.warning("Nenhum ativo encontrado no intervalo informado.")
+                        else:
+                            st.error(f"Erro da API: {r.status_code}")
+                    except requests.exceptions.ConnectionError:
+                        st.error("❌ Não foi possível conectar à API.")
+                    except Exception as e:
+                        st.error(f"Erro: {e}")
 
 # Footer
 st.markdown("---")
