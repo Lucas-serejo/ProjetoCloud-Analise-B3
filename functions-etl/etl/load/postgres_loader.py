@@ -27,7 +27,8 @@ class PostgresLoader:
                     port=Config.POSTGRES_PORT,
                     dbname=Config.POSTGRES_DB,
                     user=Config.POSTGRES_USER,
-                    password=Config.POSTGRES_PASSWORD
+                    password=Config.POSTGRES_PASSWORD,
+                    sslmode=getattr(Config, "POSTGRES_SSL_MODE", "require")
                 )
                 self.conn.autocommit = False
                 self.cursor = self.conn.cursor()

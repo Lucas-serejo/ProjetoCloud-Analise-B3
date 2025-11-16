@@ -10,7 +10,8 @@ def get_connection_params():
         "port": os.getenv("POSTGRES_PORT", "5432"),
         "dbname": os.getenv("POSTGRES_DB", "b3_data"),
         "user": os.getenv("POSTGRES_USER", "user"),
-        "password": os.getenv("POSTGRES_PASSWORD", "password")
+        "password": os.getenv("POSTGRES_PASSWORD", "password"),
+        "sslmode": os.getenv("POSTGRES_SSL_MODE", "require"),
     }
 
 

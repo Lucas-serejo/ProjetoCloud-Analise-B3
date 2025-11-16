@@ -26,6 +26,7 @@ class Config:
     POSTGRES_DB = os.getenv("POSTGRES_DB", "b3_data")
     POSTGRES_USER = os.getenv("POSTGRES_USER", "user")
     POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "password")
+    POSTGRES_SSL_MODE = os.getenv("POSTGRES_SSL_MODE", "require")
     
     # Exportação opcional
     EXPORT_JSON = os.getenv("EXPORT_JSON", "false").lower() == "true"
