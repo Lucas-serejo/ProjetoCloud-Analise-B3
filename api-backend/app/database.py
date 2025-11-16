@@ -4,7 +4,7 @@ from contextlib import contextmanager
 
 
 def get_connection_params():
-    """Retorna parâmetros de conexão do banco"""
+    """Parâmetros de conexão do PostgreSQL."""
     return {
         "host": os.getenv("POSTGRES_HOST", "localhost"),
         "port": os.getenv("POSTGRES_PORT", "5432"),
@@ -16,7 +16,7 @@ def get_connection_params():
 
 @contextmanager
 def get_db():
-    """Context manager para conexão com banco"""
+    """Context manager de conexão PostgreSQL."""
     conn = None
     try:
         conn = psycopg2.connect(**get_connection_params())

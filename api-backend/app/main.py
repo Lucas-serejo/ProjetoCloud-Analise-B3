@@ -29,7 +29,7 @@ app.add_middleware(
 
 @app.get("/api/cotacoes/datas")
 def listar_datas_disponiveis():
-    """Retorna as datas disponíveis (distintas) com cotações, em ordem crescente."""
+    """Lista datas com cotações (ordem crescente)."""
     try:
         query = """
             SELECT data_pregao::date AS data, COUNT(*) AS total
@@ -67,14 +67,7 @@ def buscar_historico_ativo(
     codigo_ativo: str,
     limite: int = Query(10, ge=1, le=100, description="Quantidade de registros (máx: 100)")
 ):
-    """
-    Retorna histórico de cotações de um ativo específico.
-    
-    - **codigo_ativo**: Código do ativo na B3 (ex: PETR4, VALE3, ITUB4, BBAS3)
-    - **limite**: Quantidade de registros mais recentes (padrão: 10, máximo: 100)
-    
-    Exemplo: /api/cotacoes/PETR4?limite=20
-    """
+    """Histórico do ativo (limite padrão 10)."""
     try:
         query = """
             SELECT ativo, data_pregao, abertura, fechamento, maximo, minimo, volume
@@ -122,13 +115,7 @@ def buscar_historico_ativo(
 
 @app.get("/api/cotacoes/{codigo_ativo}/latest")
 def cotacao_mais_recente(codigo_ativo: str):
-    """
-    Retorna a cotação mais recente de um ativo específico.
-    
-    - **codigo_ativo**: Código do ativo na B3 (ex: PETR4, VALE3, ITUB4, BBAS3)
-    
-    Exemplo: /api/cotacoes/PETR4/latest
-    """
+    """Cotação mais recente do ativo."""
     try:
         query = """
             SELECT ativo, data_pregao, abertura, fechamento, maximo, minimo, volume
@@ -167,7 +154,7 @@ def cotacao_mais_recente(codigo_ativo: str):
 
 @app.get("/api/ativos")
 def listar_ativos():
-    """Lista todos os ativos disponíveis no banco"""
+    """Lista todos os ativos distintos."""
     try:
         query = "SELECT DISTINCT ativo FROM cotacoes ORDER BY ativo"
         
@@ -187,10 +174,7 @@ def listar_ativos():
 
 @app.get("/api/cotacoes")
 def listar_cotacoes_sem_parametros():
-    """
-    Retorna TODAS as cotações da base (sem parâmetros).
-    Atenção: pode ser pesado conforme a base cresce.
-    """
+    """Lista todas as cotações (sem filtros)."""
     try:
         query = """
             SELECT ativo, data_pregao, abertura, fechamento, maximo, minimo, volume
@@ -232,9 +216,7 @@ def listar_cotacoes_sem_parametros():
 
 @app.get("/api/cotacoes/data/{data}")
 def listar_cotacoes_por_data(data: date):
-    """
-    Retorna cotações de uma data específica (sem query params).
-    """
+    """Cotações de uma data específica."""
     try:
         query = """
             SELECT ativo, data_pregao, abertura, fechamento, maximo, minimo, volume
@@ -281,10 +263,7 @@ def listar_ativos_por_intervalo(
     inicio: date = Query(..., description="Data inicial (YYYY-MM-DD)"),
     fim: date = Query(..., description="Data final (YYYY-MM-DD)")
 ):
-    """
-    Lista os ativos que possuem cotações no intervalo de datas informado (inclusive),
-    com a quantidade de registros por ativo. Ordenado por quantidade decrescente.
-    """
+    """Ativos com contagem entre duas datas (inclusive)."""
     try:
         if fim < inicio:
             raise HTTPException(status_code=400, detail="A data final deve ser maior ou igual à inicial")

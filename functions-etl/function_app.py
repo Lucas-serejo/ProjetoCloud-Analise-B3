@@ -14,20 +14,14 @@ from etl.load.postgres_loader import PostgresLoader
 # Configura logging
 logging.basicConfig(level=logging.INFO)
 
-# Inicializa a aplicação de funções
+# Inicializa a Function App
 app = func.FunctionApp()
 
-#================================================================================
-# FUNÇÃO 1: Extração (Timer Trigger) - Executa diariamente às 19h (horário Brasília)
-#================================================================================
+# Timer Trigger: baixa ZIP do dia útil e envia XMLs ao Blob
 @app.timer_trigger(schedule="0 0 22 * * 1-5", arg_name="mytimer", run_on_startup=False,
-                   use_monitor=True) 
-# NOTA: "0 0 22 * * 1-5" = 22:00 UTC (19h Brasília), Segunda a Sexta
-# Para testar localmente: "0 */5 * * * *" (a cada 5 minutos)
+                   use_monitor=True)
 def ExtractorTimer(mytimer: func.TimerRequest) -> None:
-    """
-    Timer Trigger que baixa arquivos da B3 diariamente e faz upload para o Blob Storage.
-    """
+    """Baixa ZIP da B3 e envia XMLs ao Blob."""
     if mytimer.past_due:
         logging.warning('Timer está executando com atraso.')
 
@@ -36,11 +30,11 @@ def ExtractorTimer(mytimer: func.TimerRequest) -> None:
     try:
         extractor = B3Extractor()
         
-        # Tenta baixar os dados do dia útil mais recente (até 5 dias atrás)
+        # Baixa o último dia útil disponível (até 5 dias)
         zip_bytes = None
         date_str = None
         
-        logging.info('Procurando arquivo da B3 nos últimos dias úteis...')
+        logging.info('Procurando arquivo nos últimos dias úteis...')
         for dt in iter_uteis_ate(max_days=5):
             ds = yymmdd(dt)
             logging.info(f"Tentando baixar para data: {ds}")
@@ -57,16 +51,16 @@ def ExtractorTimer(mytimer: func.TimerRequest) -> None:
             logging.error("❌ Nenhum arquivo encontrado nos últimos 5 dias úteis.")
             return
 
-        # Extrai XMLs do ZIP e faz upload para o Blob Storage
+        # Extrai XMLs e envia ao Blob
         container_client = get_container_client()
         
         logging.info('Extraindo arquivos do ZIP...')
         with zipfile.ZipFile(io.BytesIO(zip_bytes), "r") as zf1:
-            # Primeira camada do ZIP
+            # Primeira camada
             inner_zip_name = zf1.namelist()[0]
             inner_zip_bytes = zf1.read(inner_zip_name)
             
-            # Segunda camada (arquivos XML)
+            # Segunda camada (XMLs)
             with zipfile.ZipFile(io.BytesIO(inner_zip_bytes), "r") as zf2:
                 xml_files = [f for f in zf2.namelist() if f.endswith('.xml')]
                 logging.info(f"Encontrados {len(xml_files)} arquivos XML")
@@ -92,9 +86,9 @@ def ExtractorTimer(mytimer: func.TimerRequest) -> None:
         logging.error(traceback.format_exc())
 
 
-# Função auxiliar para gerar dias úteis
+# Gera datas úteis (seg-sex) em ordem decrescente
 def iter_uteis_ate(max_days: int = 10, base: datetime = None):
-    """Gera datas em ordem decrescente, apenas dias úteis (seg-sex)."""
+    """Retorna até max_days datas úteis a partir de base."""
     if base is None:
         base = datetime.now()
     for i in range(max_days):
@@ -102,22 +96,16 @@ def iter_uteis_ate(max_days: int = 10, base: datetime = None):
         if dt.weekday() < 5:  # 0=seg, 4=sex
             yield dt
 
-
-#================================================================================
-# FUNÇÃO 2: Carga (Blob Trigger) - Processa XMLs quando são criados no Blob
-#================================================================================
-@app.blob_trigger(arg_name="myblob", 
+# Blob Trigger: processa XML adicionado ao Blob e carrega no Postgres
+@app.blob_trigger(arg_name="myblob",
                   path="dados-pregao/xml/{date}/{name}.xml",
-                  connection="AzureWebJobsStorage") 
+                  connection="AzureWebJobsStorage")
 def LoaderBlobTrigger(myblob: func.InputStream):
-    """
-    Blob Trigger que processa arquivos XML quando são adicionados ao Blob Storage.
-    Extrai cotações e carrega no PostgreSQL.
-    """
+    """Extrai cotações do XML e carrega no PostgreSQL."""
     logging.info(f'=== INICIANDO PROCESSAMENTO DO BLOB: {myblob.name} ===')
     
     try:
-        # Lê o conteúdo do arquivo XML
+        # Lê conteúdo do XML
         xml_content = myblob.read()
         if not xml_content:
             logging.warning(f"⚠️ Blob vazio: {myblob.name}")
@@ -125,7 +113,7 @@ def LoaderBlobTrigger(myblob: func.InputStream):
 
         logging.info(f"Tamanho do arquivo: {len(xml_content)} bytes")
 
-        # Parse do XML para extrair cotações
+        # Parse de XML para cotações
         parser = B3XMLParser()
         cotacoes = parser.parse_xml(xml_content)
         

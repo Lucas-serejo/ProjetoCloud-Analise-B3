@@ -10,14 +10,14 @@ st.set_page_config(
     layout="wide"
 )
 
-# URL da API (alterar para produção depois do deploy)
+# URL da API (ajuste para produção após deploy)
 API_URL = "http://localhost:8000"
 
-# Título principal
+# Título
 st.title("📊 B3 Cotações - Análise de Mercado")
 st.markdown("---")
 
-# Sidebar para navegação
+# Menu lateral
 st.sidebar.title("Menu")
 opcao = st.sidebar.radio(
     "Selecione uma opção:",
@@ -29,13 +29,11 @@ opcao = st.sidebar.radio(
     ]
 )
 
-# ============================================================================
-# OPÇÃO 1: Cotações do Dia
-# ============================================================================
+# Cotações do dia
 if opcao == "📅 Cotações do Dia":
     st.header("📅 Cotações do Dia")
 
-    # Carregar datas disponíveis da API
+    # Carrega datas disponíveis
     datas_disponiveis = []
     try:
         resp_datas = requests.get(f"{API_URL}/api/cotacoes/datas", timeout=20)
@@ -52,7 +50,7 @@ if opcao == "📅 Cotações do Dia":
     except Exception as e:
         st.error(f"❌ Erro ao carregar datas: {e}")
 
-    # Seletor de data baseado no que existe no banco
+    # Seletor de data baseado no banco
     if datas_disponiveis:
         default_idx = len(datas_disponiveis) - 1  # última data por padrão
         data_selecionada = st.selectbox(
@@ -71,7 +69,7 @@ if opcao == "📅 Cotações do Dia":
     if st.button("Buscar Cotações", type="primary"):
         with st.spinner("Buscando cotações..."):
             try:
-                # Chamada à API
+                # Chama API
                 response = requests.get(f"{API_URL}/api/cotacoes/data/{data_selecionada}")
                 
                 if response.status_code == 200:
@@ -83,23 +81,23 @@ if opcao == "📅 Cotações do Dia":
                     col2.metric("Data", data["data"])
                     col3.metric("Status", "✅ Disponível")
                     
-                    # Converter para DataFrame
+                    # DataFrame
                     df = pd.DataFrame(data["dados"])
                     
-                    # Formatar valores
+                    # Formatação
                     df["abertura"] = df["abertura"].apply(lambda x: f"R$ {x:,.2f}")
                     df["fechamento"] = df["fechamento"].apply(lambda x: f"R$ {x:,.2f}")
                     df["maximo"] = df["maximo"].apply(lambda x: f"R$ {x:,.2f}")
                     df["minimo"] = df["minimo"].apply(lambda x: f"R$ {x:,.2f}")
                     df["volume"] = df["volume"].apply(lambda x: f"{x:,}")
                     
-                    # Renomear colunas
+                    # Renomeia colunas
                     df.columns = ["Ativo", "Data Pregão", "Abertura", "Fechamento", "Máximo", "Mínimo", "Volume"]
                     
-                    # Exibir tabela
+                    # Tabela
                     st.dataframe(df, use_container_width=True, height=400)
                     
-                    # Botão de download
+                    # Download CSV
                     csv = df.to_csv(index=False).encode('utf-8')
                     st.download_button(
                         label="📥 Baixar CSV",
@@ -118,9 +116,7 @@ if opcao == "📅 Cotações do Dia":
             except Exception as e:
                 st.error(f"❌ Erro: {str(e)}")
 
-# ============================================================================
-# OPÇÃO 2: Buscar Ativo Específico
-# ============================================================================
+# Buscar ativo específico
 elif opcao == "🔍 Buscar Ativo":
     st.header("🔍 Buscar Ativo Específico")
     
@@ -147,13 +143,13 @@ elif opcao == "🔍 Buscar Ativo":
         else:
             with st.spinner(f"Buscando {codigo_ativo}..."):
                 try:
-                    # Chamada à API
+                    # Chama API
                     response = requests.get(f"{API_URL}/api/cotacoes/{codigo_ativo}?limite={limite}")
                     
                     if response.status_code == 200:
                         data = response.json()
                         
-                        # Última cotação em destaque
+                        # Última cotação
                         st.subheader(f"📊 {data['ativo']}")
                         ultima = data["dados"][0]
                         
@@ -169,20 +165,20 @@ elif opcao == "🔍 Buscar Ativo":
                         st.subheader("📈 Histórico")
                         df = pd.DataFrame(data["dados"])
                         
-                        # Formatar valores
+                        # Formatação
                         df["abertura"] = df["abertura"].apply(lambda x: f"R$ {x:,.2f}")
                         df["fechamento"] = df["fechamento"].apply(lambda x: f"R$ {x:,.2f}")
                         df["maximo"] = df["maximo"].apply(lambda x: f"R$ {x:,.2f}")
                         df["minimo"] = df["minimo"].apply(lambda x: f"R$ {x:,.2f}")
                         df["volume"] = df["volume"].apply(lambda x: f"{x:,}")
                         
-                        # Renomear colunas
+                        # Renomeia colunas
                         df.columns = ["Ativo", "Data", "Abertura", "Fechamento", "Máximo", "Mínimo", "Volume"]
                         
-                        # Exibir tabela
+                        # Tabela
                         st.dataframe(df, use_container_width=True)
                         
-                        # Botão de download
+                        # Download CSV
                         csv = df.to_csv(index=False).encode('utf-8')
                         st.download_button(
                             label="📥 Baixar CSV",
@@ -201,16 +197,14 @@ elif opcao == "🔍 Buscar Ativo":
                 except Exception as e:
                     st.error(f"❌ Erro: {str(e)}")
 
-# ============================================================================
-# OPÇÃO 3: Lista de Ativos Disponíveis
-# ============================================================================
+# Lista de ativos disponíveis
 elif opcao == "📈 Ativos Disponíveis":
     st.header("📈 Ativos Disponíveis")
     
     if st.button("Carregar Ativos", type="primary"):
         with st.spinner("Carregando ativos..."):
             try:
-                # Chamada à API
+                # Chama API
                 response = requests.get(f"{API_URL}/api/ativos")
                 
                 if response.status_code == 200:
@@ -219,10 +213,10 @@ elif opcao == "📈 Ativos Disponíveis":
                     # Métrica
                     st.metric("Total de Ativos", data["total"])
                     
-                    # Criar DataFrame
+                    # DataFrame
                     ativos = data["ativos"]
                     
-                    # Dividir em colunas para melhor visualização
+                    # Exibição em colunas
                     num_colunas = 5
                     colunas = st.columns(num_colunas)
                     
@@ -233,7 +227,7 @@ elif opcao == "📈 Ativos Disponíveis":
                     
                     st.markdown("---")
                     
-                    # Botão de download
+                    # Download CSV
                     df = pd.DataFrame({"Ativo": ativos})
                     csv = df.to_csv(index=False).encode('utf-8')
                     st.download_button(
@@ -251,13 +245,11 @@ elif opcao == "📈 Ativos Disponíveis":
             except Exception as e:
                 st.error(f"❌ Erro: {str(e)}")
 
-# ============================================================================
-# OPÇÃO 4: Ativos por Intervalo de Datas
-# ============================================================================
+# Ativos por intervalo de datas
 elif opcao == "🗓️ Ativos por Intervalo":
     st.header("🗓️ Ativos por Intervalo de Datas")
 
-    # Carregar datas disponíveis para limitar o range
+    # Carrega datas disponíveis para limitar o range
     datas_disponiveis = []
     try:
         resp_datas = requests.get(f"{API_URL}/api/cotacoes/datas", timeout=20)

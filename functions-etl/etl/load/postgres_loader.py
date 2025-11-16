@@ -9,15 +9,15 @@ class PostgresLoader:
         self.cursor = None
     
     def load_cotacoes(self, cotacoes):
-        """Alias para o método execute() para compatibilidade"""
+        """Alias para execute(), por compatibilidade."""
         return self.execute(cotacoes)
     
     def close(self):
-        """Alias para o método disconnect() para compatibilidade"""
+        """Alias para disconnect(), por compatibilidade."""
         self.disconnect()
     
     def connect(self, max_retries=5, retry_interval=2):
-        # Estabelece a conexão com o banco de dados PostgreSQL
+        # Conecta ao PostgreSQL com retries simples
         import time
         
         for attempt in range(max_retries):
@@ -31,9 +31,9 @@ class PostgresLoader:
                 )
                 self.conn.autocommit = False
                 self.cursor = self.conn.cursor()
-                print("[INFO] Conexão com o PostgreSQL estabelecida com sucesso.")
+                print("[INFO] Conexão PostgreSQL estabelecida")
                 return True
-            # Captura outras exceções
+            # Re-tenta em falha operacional
             except psycopg2.OperationalError as e:
                 if attempt < max_retries - 1:
                     print(f"[WARNING] Falha na conexão (tentativa {attempt+1}/{max_retries}): {str(e)}")
@@ -44,14 +44,14 @@ class PostgresLoader:
         return False
     
     def disconnect(self):
-        # Encerra a conexão com o banco de dados
+        # Encerra a conexão
         if self.cursor:
             self.cursor.close()
         if self.conn:
             self.conn.close()
     
     def truncate_table(self):
-        """Limpa todos os registros da tabela cotacoes"""
+        """Esvazia a tabela cotacoes (restart identity)."""
         try:
             if not self.conn or self.conn.closed:
                 self.connect()
@@ -67,7 +67,7 @@ class PostgresLoader:
             raise
     
     def execute(self, cotacoes):
-        # Insere as cotações no banco de dados
+        # Insere/atualiza cotações
         if not cotacoes:
             print("[WARNING] Nenhuma cotação para inserir")
             return 0
@@ -80,7 +80,7 @@ class PostgresLoader:
             updated = 0
             
             for cotacao in cotacoes:
-            # Monta o dicionário de registro
+                # Monta registro
                 registro = {
                     'ativo': cotacao['ativo'],
                     'data_pregao': cotacao['data_pregao'],
@@ -89,10 +89,9 @@ class PostgresLoader:
                     'maximo': cotacao['maximo'],
                     'minimo': cotacao['minimo'],
                     'volume': cotacao['volume'],
-                    # timestamp_processamento é preenchido automaticamente pelo banco
                 }
                 
-                # Verifica se o registro já existe
+                # Existe?
                 self.cursor.execute(
                     "SELECT id FROM cotacoes WHERE ativo = %s AND data_pregao = %s",
                     (registro['ativo'], registro['data_pregao'])
@@ -101,13 +100,13 @@ class PostgresLoader:
                 result = self.cursor.fetchone()
                 
                 if result:
-                    # Atualiza o registro existente
+                    # Atualiza
                     cotacao_id = result[0]
                     update_fields = []
                     update_values = []
                     
                     for key, value in registro.items():
-                        # Evita atualizar campos chave
+                        # Não atualiza chaves
                         if key != 'ativo' and key != 'data_pregao':  
                             update_fields.append(f"{key} = %s")
                             update_values.append(value)
@@ -116,7 +115,7 @@ class PostgresLoader:
                     self.cursor.execute(update_query, update_values + [cotacao_id])
                     updated += 1
                 else:
-                    # Insere novo registro
+                    # Insere
                     columns = ', '.join(registro.keys())
                     placeholders = ', '.join(['%s'] * len(registro))
                     insert_query = f"INSERT INTO cotacoes ({columns}) VALUES ({placeholders})"

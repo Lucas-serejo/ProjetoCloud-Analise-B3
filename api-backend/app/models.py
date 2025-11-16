@@ -4,7 +4,7 @@ from decimal import Decimal
 
 
 class Cotacao(BaseModel):
-    """Schema de cotação"""
+    """Schema de cotação."""
     ativo: str
     data_pregao: date
     abertura: Decimal
