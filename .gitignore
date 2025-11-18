@@ -27,7 +27,6 @@ obj/
 dados_b3/
 functions-etl/dados_b3/
 backend/dados_b3/
-functions-etl/backfill_historico.py
 .DS_Store
 .idea/
 .env.local

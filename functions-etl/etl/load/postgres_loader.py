@@ -68,7 +68,7 @@ class PostgresLoader:
             raise
     
     def execute(self, cotacoes):
-        # Insere/atualiza cotações
+        # Insere/atualiza cotações usando batch upsert (muito mais rápido)
         if not cotacoes:
             print("[WARNING] Nenhuma cotação para inserir")
             return 0
@@ -76,56 +76,41 @@ class PostgresLoader:
         try:
             if not self.conn or self.conn.closed:
                 self.connect()
-                
-            inserted = 0
-            updated = 0
             
-            for cotacao in cotacoes:
-                # Monta registro
-                registro = {
-                    'ativo': cotacao['ativo'],
-                    'data_pregao': cotacao['data_pregao'],
-                    'abertura': cotacao['abertura'],
-                    'fechamento': cotacao['fechamento'],
-                    'maximo': cotacao['maximo'],
-                    'minimo': cotacao['minimo'],
-                    'volume': cotacao['volume'],
-                }
-                
-                # Existe?
-                self.cursor.execute(
-                    "SELECT id FROM cotacoes WHERE ativo = %s AND data_pregao = %s",
-                    (registro['ativo'], registro['data_pregao'])
+            # Usar ON CONFLICT para upsert em lote
+            insert_query = """
+                INSERT INTO cotacoes (ativo, data_pregao, abertura, fechamento, maximo, minimo, volume)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (ativo, data_pregao) 
+                DO UPDATE SET
+                    abertura = EXCLUDED.abertura,
+                    fechamento = EXCLUDED.fechamento,
+                    maximo = EXCLUDED.maximo,
+                    minimo = EXCLUDED.minimo,
+                    volume = EXCLUDED.volume
+            """
+            
+            # Preparar dados para batch insert
+            batch_data = [
+                (
+                    cotacao['ativo'],
+                    cotacao['data_pregao'],
+                    cotacao['abertura'],
+                    cotacao['fechamento'],
+                    cotacao['maximo'],
+                    cotacao['minimo'],
+                    cotacao['volume']
                 )
-                
-                result = self.cursor.fetchone()
-                
-                if result:
-                    # Atualiza
-                    cotacao_id = result[0]
-                    update_fields = []
-                    update_values = []
-                    
-                    for key, value in registro.items():
-                        # Não atualiza chaves
-                        if key != 'ativo' and key != 'data_pregao':  
-                            update_fields.append(f"{key} = %s")
-                            update_values.append(value)
-                    
-                    update_query = f"UPDATE cotacoes SET {', '.join(update_fields)} WHERE id = %s"
-                    self.cursor.execute(update_query, update_values + [cotacao_id])
-                    updated += 1
-                else:
-                    # Insere
-                    columns = ', '.join(registro.keys())
-                    placeholders = ', '.join(['%s'] * len(registro))
-                    insert_query = f"INSERT INTO cotacoes ({columns}) VALUES ({placeholders})"
-                    self.cursor.execute(insert_query, list(registro.values()))
-                    inserted += 1
+                for cotacao in cotacoes
+            ]
+            
+            # Executar em batch
+            from psycopg2.extras import execute_batch
+            execute_batch(self.cursor, insert_query, batch_data, page_size=500)
             
             self.conn.commit()
-            print(f"[SUCCESS] Processo de carga concluído! Inseridos: {inserted}, Atualizados: {updated}")
-            return inserted + updated
+            print(f"[SUCCESS] Processo de carga concluído! {len(cotacoes)} registros processados em batch")
+            return len(cotacoes)
             
         except Exception as e:
             if self.conn:
