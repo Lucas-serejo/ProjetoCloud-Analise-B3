@@ -5,15 +5,15 @@ on:
     branches:
       - main
     paths:
-      - 'frontend/**' # <-- Só roda quando a pasta frontend mudar
+      - 'frontend/**'
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write # Required for requesting the JWT
-      contents: read # Required for actions/checkout
+      id-token: write
+      contents: read 
 
     steps:
       - name: Checkout repository
@@ -30,5 +30,5 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: 'b3-frontend'
-          package: './frontend' # <-- Envia APENAS a pasta do frontend
-          startup-command: 'streamlit run app.py --server.port 8000 --server.address 0.0.0.0' # <-- Comando para iniciar o Streamlit
+          package: './frontend'
+          startup-command: 'streamlit run app.py'
