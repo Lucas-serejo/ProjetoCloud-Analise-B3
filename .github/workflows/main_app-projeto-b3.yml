@@ -79,3 +79,4 @@ jobs:
         with:
           app-name: 'app-projeto-b3'
           slot-name: 'Production'
+          startup-command: 'alembic upgrade head && gunicorn -k uvicorn.workers.UvicornWorker api-backend.app.main:app'
