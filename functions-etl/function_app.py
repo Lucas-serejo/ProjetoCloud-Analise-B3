@@ -98,7 +98,7 @@ def iter_uteis_ate(max_days: int = 10, base: datetime = None):
 
 # Blob Trigger: processa XML adicionado ao Blob e carrega no Postgres
 @app.blob_trigger(arg_name="myblob",
-                  path="dados-pregao/xml/{date}/{name}.xml",
+                  path="xml/{date}/{name}.xml",  # <-- CORRIGIDO: removido "dados-pregao/"
                   connection="AzureWebJobsStorage")
 def LoaderBlobTrigger(myblob: func.InputStream):
     """Extrai cotações do XML e carrega no PostgreSQL."""
