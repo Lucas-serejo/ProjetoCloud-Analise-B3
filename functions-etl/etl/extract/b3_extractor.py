@@ -7,7 +7,7 @@ from etl.common.helpers import yymmdd
 from etl.common.config import Config
 from etl.common.storage import get_container_client, upload_blob
 
-# Gera datas em ordem decrescente, apenas dias úteis (seg-sex)
+# Gera datas úteis (seg-sex) em ordem decrescente
 def iter_uteis_ate(max_days: int = 10, base: datetime | None = None):
     if base is None:
         base = datetime.now()
@@ -35,7 +35,7 @@ class B3Extractor:
         
         url = self.build_url(date_str)
         session = requests.Session()
-        # Define um User-Agent para evitar bloqueios eventuais
+        # User-Agent para reduzir bloqueios
         session.headers.update({
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0 Safari/537.36"
         })
@@ -43,7 +43,7 @@ class B3Extractor:
         try:
             print(f"[INFO] Tentando {url}")
             resp = session.get(url, timeout=30)
-            # Confirma que é um ZIP válido: começa com assinatura PK
+            # Verifica assinatura PK de ZIP válido
             if resp.ok and resp.content and len(resp.content) > 200 and resp.content[:2] == b"PK":
                 return resp.content, date_str
         except requests.RequestException:
@@ -52,23 +52,22 @@ class B3Extractor:
         return None, None
     
     def extract_files(self, zip_bytes, date_str):
-        # Extrai os arquivos do ZIP da B3.
-        # Garantir que o diretório existe
+        # Extrai arquivos do ZIP
         self.data_dir.mkdir(parents=True, exist_ok=True)
         
-        # Salvar o ZIP
+        # Salva ZIP
         zip_path = self.data_dir / f"pregao_{date_str}.zip"
         zip_path.write_bytes(zip_bytes)
         print(f"[OK] Zip salvo em {zip_path}")
         
-        # Extrair primeira camada
+        # Extrai primeira camada
         extract_dir_1 = self.data_dir / f"pregao_{date_str}"
         extract_dir_1.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(zip_path, "r") as zf:
             zf.extractall(extract_dir_1)
         print(f"[OK] Primeira extração concluída em {extract_dir_1}")
         
-        # Extrair segunda camada
+        # Extrai segunda camada
         inner_zip_path = extract_dir_1 / f"SPRE{date_str}.zip"
         if not inner_zip_path.exists():
             raise FileNotFoundError(f"Inner zip não encontrado: {inner_zip_path}")
@@ -79,7 +78,7 @@ class B3Extractor:
             zf.extractall(extract_dir_2)
         print(f"[OK] Segunda extração concluída em {extract_dir_2}")
         
-        # Verificar se existem XMLs
+        # Verifica XMLs
         xml_files = list(extract_dir_2.glob("*.xml"))
         if not xml_files:
             raise RuntimeError(f"Nenhum arquivo XML encontrado em {extract_dir_2}")
@@ -92,8 +91,7 @@ class B3Extractor:
         }
     
     def execute(self):
-        # Executa o processo de extração completo.
-        # Percorre últimos dias úteis até encontrar um arquivo disponível
+        # Executa extração para o primeiro dia útil disponível
         zip_bytes = None
         date_str = None
         for dt in iter_uteis_ate(max_days=10):
@@ -111,25 +109,18 @@ class B3Extractor:
         
         print(f"[OK] Baixado arquivo de cotações para {date_str}")
         
-        # Extrai os arquivos
+        # Extrai arquivos
         result = self.extract_files(zip_bytes, date_str)
         print(f"[SUCCESS] Extração concluída! {len(result['xml_files'])} arquivos XML extraídos.")
         
         return result
 
     def run(self, multi_day=False, days_limit=5):
-        """
-        Executa o processo completo de extração.
-        
-        Args:
-            multi_day (bool): Se True, tenta extrair dados de múltiplos dias
-            days_limit (int): Número máximo de dias úteis a processar
-        """
+        """Executa extração single-day ou multi-day."""
         results = []
         processed_dates = set()
         
-        # Se multi_day=True, tentamos extrair dados de vários dias úteis
-        # Se multi_day=False, paramos no primeiro dia disponível (comportamento original)
+        # multi_day: percorre vários dias úteis; senão, para no primeiro sucesso
         for dt in iter_uteis_ate(max_days=days_limit):
             date_str = yymmdd(dt)
             
@@ -142,14 +133,14 @@ class B3Extractor:
                 print(f"[OK] Baixado arquivo de cotações para {ok_date}")
                 result = self.extract_files(zip_bytes, ok_date)
                 
-                # Upload para o blob storage
+                # Upload para Blob
                 if Config.UPLOAD_TO_BLOB:
                     self.upload_to_blob(result)
                     
                 results.append(result)
                 processed_dates.add(ok_date)
                 
-                # Se não estamos em modo multi-dia, paramos após o primeiro sucesso
+                # Em modo single-day, para no primeiro sucesso
                 if not multi_day:
                     break
             else:
@@ -158,7 +149,7 @@ class B3Extractor:
         if not results:
             raise RuntimeError("Não foi possível baixar o arquivo de cotações nos últimos dias úteis verificados")
         
-        # Retorna um dicionário combinado com todos os resultados
+        # Resultado combinado
         combined_result = {
             "dates": [r["date"] for r in results],
             "zip_paths": [r["zip_path"] for r in results],
@@ -168,7 +159,7 @@ class B3Extractor:
         
         return combined_result
 
-    # Método auxiliar para upload de blobs
+    # Upload de XMLs para Blob
     def upload_to_blob(self, result):
         print("[INFO] Iniciando upload para o Blob Storage...")
         container = get_container_client()

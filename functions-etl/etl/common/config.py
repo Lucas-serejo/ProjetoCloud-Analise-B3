@@ -1,5 +1,11 @@
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Carrega variáveis do .env na raiz do repo
+env_path = Path(__file__).parent.parent.parent.parent / '.env'
+if env_path.exists():
+    load_dotenv(env_path)
 
 class Config:
     # Diretórios
@@ -20,10 +26,11 @@ class Config:
     POSTGRES_DB = os.getenv("POSTGRES_DB", "b3_data")
     POSTGRES_USER = os.getenv("POSTGRES_USER", "user")
     POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "password")
+    POSTGRES_SSL_MODE = os.getenv("POSTGRES_SSL_MODE", "require")
     
-    # Configurações de exportação
+    # Exportação opcional
     EXPORT_JSON = os.getenv("EXPORT_JSON", "false").lower() == "true"
 
-    # Novas configurações para processamento de múltiplos dias
+    # Processamento multi-dia
     MULTI_DAY_PROCESSING = os.getenv("MULTI_DAY_PROCESSING", "false").lower() == "true"
     MULTI_DAY_LIMIT = int(os.getenv("MULTI_DAY_LIMIT", "5"))  # Número de dias úteis para processar

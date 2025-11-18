@@ -1,94 +1,135 @@
 # ProjetoCloud-Analise-B3
 
-Pipeline ETL para Análise de Cotações da B3 - **Versão Local com Docker**
+Pipeline ETL para Análise de Cotações da B3 - **Azure Cloud**
 
 ## 🚀 Visão Geral
 
-Pipeline automatizado que extrai cotações diárias da B3, processa arquivos XML e armazena dados estruturados em PostgreSQL, usando Azure Blob Storage (Azurite) como camada intermediária.
+Pipeline automatizado na Azure que extrai cotações diárias da B3, processa arquivos XML e armazena dados estruturados em PostgreSQL, com API FastAPI e frontend Streamlit.
 
-### Arquitetura ETL
+### Arquitetura
 
 ```
-🌐 B3 Website → 📦 Extract → 📁 Azure Blob → 🔄 Transform → 🗄️ PostgreSQL
+🌐 B3 Website → ⚡ Azure Functions (Timer) → 📁 Azure Blob Storage 
+                     ↓
+              ⚡ Azure Functions (Blob Trigger) → 🔄 Transform → 🗄️ PostgreSQL Azure
+                     ↓
+              🌐 FastAPI (App Service) ← 📊 Streamlit Frontend
 ```
 
 ## 🏗️ Componentes
 
-- **Extract**: Baixa arquivos SPRE.zip da B3 e extrai XMLs
-- **Transform**: Processa XMLs usando XPath e aplica filtros de mercado à vista  
-- **Load**: Insere/atualiza cotações no PostgreSQL com upsert
-- **Storage**: Azurite (emulador Azure Blob Storage)
-- **Database**: PostgreSQL com migrações Alembic
+### Backend
+- **Azure Functions ETL** (`functions-etl/`)
+  - Timer Trigger: Extrai arquivos SPRE.zip da B3 diariamente (22:00 UTC, dias úteis)
+  - Blob Trigger: Processa XMLs automaticamente ao detectar novos arquivos
+  - Transform: Parser XML com XPath e filtros de mercado à vista
+  - Load: Insere/atualiza cotações no PostgreSQL (upsert)
 
-## 🚀 Como Executar
+- **API FastAPI** (`api-backend/`)
+  - Endpoints REST para consultar cotações, ativos e datas disponíveis
+  - Integração com PostgreSQL Azure
+  - Migrações com Alembic
 
-### Pré-requisitos
-- Docker Desktop instalado e rodando
-- Git
+- **Frontend Streamlit** (`frontend/`)
+  - Visualização de cotações por data
+  - Busca de ativos
+  - Consultas por intervalo de datas
+  - Exportação CSV
 
-### 1. Clone e Configure
-
-```powershell
-git clone <repository-url>
-cd ProjetoCloud-Analise-B3
-
-# Subir todos os serviços
-docker compose up -d
-```
-
-### 2. Executar Pipeline Completo
-
-```powershell
-# Executar o pipeline ETL
-docker compose exec etl python run_pipeline.py
-
-# Ou executar com logs detalhados
-docker compose exec etl python backend/run_pipeline.py
-```
-
-### 3. Verificar Resultados
-
-```powershell
-# Testar conexões e ver dados
-docker compose exec etl python backend/test_pipeline.py
-
-# Ver logs do pipeline
-docker compose logs -f etl
-```
-
-## 🔧 Comandos Úteis
-
-### Banco de Dados
-
-```powershell
-# Executar migrações
-docker compose exec etl bash -c "cd backend && alembic upgrade head"
-
-# Acessar PostgreSQL
-docker compose exec postgres psql -U postgres -d cotacoes_b3
-
-# Acessar pgAdmin: http://localhost:8080
-# Email: admin@admin.com | Senha: admin
-```
+### Infraestrutura Azure
+- **Azure Blob Storage**: Armazenamento de XMLs processados
+- **Azure PostgreSQL Flexible Server**: Banco de dados relacional
+- **Azure App Service**: Hospedagem da API e Frontend
 
 ## 🎯 Filtros Aplicados
 
-O pipeline aplica filtros para capturar apenas **ações do mercado à vista**:
+O pipeline captura apenas **ações do mercado à vista**:
 
 1. **Mercado**: `MktIdrCd ∈ {BVMF, XBSP, BOVESPA}`
-2. **Formato Ticker**: Regex `[A-Z]{3,5}\d{1,2}` (ex: PETR4, VALE3)
-3. **Units**: Regex `[A-Z]{4,5}11` (ex: ITUB11)
+2. **Formato Ticker**: Regex `[A-Z]{3,5}\d{1,2}` (ex: PETR4, VALE3, GOL3)
+3. **Units**: Regex `[A-Z]{4,5}11` (ex: ITUB11, SANB11)
 4. **Dados válidos**: Deve ter preço de fechamento
 
-## 🔍 Monitoramento
+## 🚀 Deploy
 
-### Logs do Pipeline
-```powershell
-# Ver execução em tempo real
-docker compose logs -f etl
+### Azure Functions (ETL)
+```bash
+cd functions-etl
+func azure functionapp publish <FUNCTION_APP_NAME>
+```
 
-# Verificar status dos serviços
-docker compose ps
+### API Backend
+```bash
+cd api-backend
+# Deploy via Azure App Service ou Container
+az webapp up --name <API_APP_NAME> --runtime PYTHON:3.10
+```
+
+### Frontend
+```bash
+cd frontend
+# Atualizar API_URL no código
+# Deploy via Azure App Service
+az webapp up --name <FRONTEND_APP_NAME> --runtime PYTHON:3.10
+```
+
+## 🔧 Desenvolvimento Local
+
+### Executar API
+```bash
+cd api-backend
+python start.py
+# API disponível em http://localhost:8000
+```
+
+### Executar Frontend
+```bash
+cd frontend
+streamlit run app.py
+# UI disponível em http://localhost:8501
+```
+
+### Testar Azure Functions Localmente
+```bash
+cd functions-etl
+func start
+```
+
+## 📊 Endpoints da API
+
+- `GET /api/cotacoes` - Lista todas cotações
+- `GET /api/cotacoes/data/{data}` - Cotações de uma data específica
+- `GET /api/cotacoes/datas` - Lista datas disponíveis
+- `GET /api/cotacoes/{codigo_ativo}` - Histórico de um ativo
+- `GET /api/cotacoes/{codigo_ativo}/latest` - Última cotação de um ativo
+- `GET /api/ativos` - Lista todos ativos disponíveis
+- `GET /api/ativos/intervalo` - Ativos por intervalo de datas
+
+## 🔐 Variáveis de Ambiente
+
+### Azure Functions
+```
+AzureWebJobsStorage=<connection_string>
+POSTGRES_HOST=<host>
+POSTGRES_PORT=5432
+POSTGRES_DB=<database>
+POSTGRES_USER=<user>
+POSTGRES_PASSWORD=<password>
+```
+
+### API Backend
+```
+POSTGRES_HOST=<host>
+POSTGRES_PORT=5432
+POSTGRES_DB=<database>
+POSTGRES_USER=<user>
+POSTGRES_PASSWORD=<password>
+```
+
+### Frontend
+```
+API_URL=<api_url>
+```
 
 
 
