@@ -3,9 +3,9 @@ import requests
 import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
-from etl.common.helpers import yymmdd
-from etl.common.config import Config
-from etl.common.storage import get_container_client, upload_blob
+from helpers import yymmdd
+from config import Config
+from storage import get_container_client, upload_blob
 
 # Gera datas úteis (seg-sex) em ordem decrescente
 def iter_uteis_ate(max_days: int = 10, base: datetime | None = None):

@@ -22,11 +22,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Importar módulos ETL
-from etl.extract.b3_extractor import B3Extractor
-from etl.transform.xml_parse import B3XMLParser
-from etl.load.postgres_loader import PostgresLoader
-from etl.common.storage import get_container_client, upload_blob
-from etl.common.helpers import yymmdd
+from b3_extractor import B3Extractor
+from xml_parse import B3XMLParser
+from postgres_loader import PostgresLoader
+from storage import get_container_client, upload_blob
+from helpers import yymmdd
 
 def is_dia_util(data: datetime) -> bool:
     """Verifica se é dia útil (segunda a sexta)"""
