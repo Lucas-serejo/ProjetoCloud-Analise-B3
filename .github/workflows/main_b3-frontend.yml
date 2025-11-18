@@ -1,0 +1,34 @@
+name: Build and deploy Frontend to Azure Web App - b3-frontend
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read 
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_1313F2CE3AE14792A54EB34A0F78D36F }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_FD125737007A422697083E1A9841EA0A }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_DB0E7B5FB6144508A4C4977FFA832A78 }}
+
+      - name: 'Deploy to Azure Web App'
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: 'b3-frontend'
+          package: './frontend'
+          startup-command: 'streamlit run app.py'
