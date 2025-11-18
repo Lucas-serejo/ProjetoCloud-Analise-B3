@@ -21,7 +21,6 @@ __blobstorage__/
 __queuestorage__/
 __azurite_db*__.json
 .python_packages/
-
 bin/
 obj/
 dados_b3/
@@ -31,3 +30,4 @@ backend/dados_b3/
 .idea/
 .env.local
 node_modules/
+query.sql
