@@ -35,9 +35,9 @@ def run_migrations():
 def start_server():
     """Inicia o servidor Uvicorn"""
     print("🚀 Iniciando servidor...")
-    host = os.getenv("HOST", "0.0.0.0")
-    port = int(os.getenv("PORT", "8000"))
-    
+    host = os.getenv("API_HOST", "0.0.0.0")
+    port = int(os.getenv("API_PORT", "8000"))
+
     subprocess.run([
         "uvicorn",
         "app.main:app",
