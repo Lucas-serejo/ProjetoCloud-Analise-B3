@@ -35,3 +35,17 @@ jobs:
         with:
           app-name: 'func-projeto-b3'
           package: './functions-etl' # <-- Envia APENAS a pasta das funções
+
+      - name: Remove WEBSITE_RUN_FROM_PACKAGE (post-deploy)
+        run: |
+          az functionapp config appsettings delete \
+            --name func-projeto-b3 \
+            --resource-group rg-projeto-b3 \
+            --setting-names WEBSITE_RUN_FROM_PACKAGE || true
+
+      - name: Ensure SCM_DO_BUILD_DURING_DEPLOYMENT is true
+        run: |
+          az functionapp config appsettings set \
+            --name func-projeto-b3 \
+            --resource-group rg-projeto-b3 \
+            --settings SCM_DO_BUILD_DURING_DEPLOYMENT=true
