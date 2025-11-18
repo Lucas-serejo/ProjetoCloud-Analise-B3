@@ -10,6 +10,7 @@ from storage import get_container_client
 from helpers import yymmdd
 from xml_parse import B3XMLParser
 from postgres_loader import PostgresLoader
+from config import Config
 
 # Configura logging
 logging.basicConfig(level=logging.INFO)
@@ -30,12 +31,17 @@ def ExtractorTimer(mytimer: func.TimerRequest) -> None:
     try:
         extractor = B3Extractor()
         
-        # Baixa o último dia útil disponível (até 5 dias)
         zip_bytes = None
         date_str = None
-        
+
         logging.info('Procurando arquivo nos últimos dias úteis...')
-        for dt in iter_uteis_ate(max_days=5):
+        # Use a flag para decidir quantos dias tentar
+        if Config.MULTI_DAY_PROCESSING:
+            dias = Config.MULTI_DAY_LIMIT
+        else:
+            dias = 1
+
+        for dt in iter_uteis_ate(max_days=dias):
             ds = yymmdd(dt)
             logging.info(f"Tentando baixar para data: {ds}")
             content, ok_date = extractor.download_zip(ds)
@@ -98,7 +104,7 @@ def iter_uteis_ate(max_days: int = 10, base: datetime = None):
 
 # Blob Trigger: processa XML adicionado ao Blob e carrega no Postgres
 @app.blob_trigger(arg_name="myblob",
-                  path="xml/{date}/{name}.xml",  # <-- CORRIGIDO: removido "dados-pregao/"
+                  path="dados-pregao/xml/{date}/{name}.xml",  # <-- CORRIGIDO: removido "dados-pregao/"
                   connection="AzureWebJobsStorage")
 def LoaderBlobTrigger(myblob: func.InputStream):
     """Extrai cotações do XML e carrega no PostgreSQL."""

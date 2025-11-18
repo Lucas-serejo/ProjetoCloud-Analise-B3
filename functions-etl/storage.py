@@ -13,7 +13,7 @@ def get_container_client(container_name=None):
     service = get_blob_service_client()
     container_client = service.get_container_client(container)
     try:
-        container_client.create_container(public_access=PublicAccess.Container)
+        container_client.create_container()
         print(f"[INFO] Container '{container}' criado")
     except ResourceExistsError:
         pass

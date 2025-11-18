@@ -25,7 +25,7 @@ class PostgresLoader:
         """
         for attempt in range(max_retries):
             try:
-                connection_string = getattr(Config, 'POSTGRES_CONNECTION_STRING', None)
+                connection_string = Config.POSTGRES_CONNECTION_STRING
                 
                 if connection_string:
                     # Método 1: Usar a connection string (ideal para o Azure)
@@ -38,7 +38,7 @@ class PostgresLoader:
                         dbname=Config.POSTGRES_DB,
                         user=Config.POSTGRES_USER,
                         password=Config.POSTGRES_PASSWORD,
-                        sslmode=getattr(Config, "POSTGRES_SSL_MODE", "require")
+                        sslmode=Config.POSTGRES_SSL_MODE
                     )
 
                 self.conn.autocommit = False
