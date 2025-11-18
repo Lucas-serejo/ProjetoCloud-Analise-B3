@@ -5,11 +5,11 @@ import zipfile
 from datetime import datetime, timedelta
 
 # Importações da lógica ETL
-from etl.extract.b3_extractor import B3Extractor
-from etl.common.storage import get_container_client
-from etl.common.helpers import yymmdd
-from etl.transform.xml_parse import B3XMLParser
-from etl.load.postgres_loader import PostgresLoader
+from b3_extractor import B3Extractor
+from storage import get_container_client
+from helpers import yymmdd
+from xml_parse import B3XMLParser
+from postgres_loader import PostgresLoader
 
 # Configura logging
 logging.basicConfig(level=logging.INFO)

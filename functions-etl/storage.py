@@ -1,7 +1,7 @@
 from azure.storage.blob import BlobServiceClient, PublicAccess, ContentSettings
 from azure.core.exceptions import ResourceExistsError
 from pathlib import Path
-from etl.common.config import Config
+from config import Config
 
 def get_blob_service_client():
     # Cliente de serviço de Blob a partir da connection string

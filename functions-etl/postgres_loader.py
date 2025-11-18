@@ -1,7 +1,7 @@
-from etl.common.config import Config
+from config import Config
 import psycopg2
 from datetime import datetime
-from etl.transform.xml_parse import run as transform_run
+from xml_parse import run as transform_run
 import time
 
 class PostgresLoader:
