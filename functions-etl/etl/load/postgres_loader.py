@@ -2,6 +2,7 @@ from etl.common.config import Config
 import psycopg2
 from datetime import datetime
 from etl.transform.xml_parse import run as transform_run
+import time
 
 class PostgresLoader:
     def __init__(self):
@@ -17,24 +18,34 @@ class PostgresLoader:
         self.disconnect()
     
     def connect(self, max_retries=5, retry_interval=2):
-        # Conecta ao PostgreSQL com retries simples
-        import time
-        
+        """
+        Conecta ao PostgreSQL de forma resiliente.
+        Prioriza a POSTGRES_CONNECTION_STRING (para o Azure) e faz fallback
+        para variáveis de ambiente separadas (para desenvolvimento local).
+        """
         for attempt in range(max_retries):
             try:
-                self.conn = psycopg2.connect(
-                    host=Config.POSTGRES_HOST,
-                    port=Config.POSTGRES_PORT,
-                    dbname=Config.POSTGRES_DB,
-                    user=Config.POSTGRES_USER,
-                    password=Config.POSTGRES_PASSWORD,
-                    sslmode=getattr(Config, "POSTGRES_SSL_MODE", "require")
-                )
+                connection_string = getattr(Config, 'POSTGRES_CONNECTION_STRING', None)
+                
+                if connection_string:
+                    # Método 1: Usar a connection string (ideal para o Azure)
+                    self.conn = psycopg2.connect(connection_string)
+                else:
+                    # Método 2: Fallback para variáveis separadas (para ambiente local)
+                    self.conn = psycopg2.connect(
+                        host=Config.POSTGRES_HOST,
+                        port=Config.POSTGRES_PORT,
+                        dbname=Config.POSTGRES_DB,
+                        user=Config.POSTGRES_USER,
+                        password=Config.POSTGRES_PASSWORD,
+                        sslmode=getattr(Config, "POSTGRES_SSL_MODE", "require")
+                    )
+
                 self.conn.autocommit = False
                 self.cursor = self.conn.cursor()
                 print("[INFO] Conexão PostgreSQL estabelecida")
                 return True
-            # Re-tenta em falha operacional
+            
             except psycopg2.OperationalError as e:
                 if attempt < max_retries - 1:
                     print(f"[WARNING] Falha na conexão (tentativa {attempt+1}/{max_retries}): {str(e)}")
