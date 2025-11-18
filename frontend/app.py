@@ -4,6 +4,43 @@ import requests
 import pandas as pd
 from datetime import date, timedelta
 
+
+# Funções cacheadas para reduzir latência em reruns do Streamlit
+@st.cache_data(ttl=600, show_spinner=False)
+def fetch_datas(api_url: str):
+    r = requests.get(f"{api_url}/api/cotacoes/datas", timeout=12)
+    r.raise_for_status()
+    return r.json()
+
+
+@st.cache_data(ttl=180, show_spinner=False)
+def fetch_intervalo(api_url: str, inicio: str, fim: str):
+    url = f"{api_url}/api/ativos/intervalo?inicio={inicio}&fim={fim}"
+    r = requests.get(url, timeout=20)
+    if r.status_code == 404:
+        return {"status": 404}
+    r.raise_for_status()
+    return r.json()
+
+# Lista de ativos cacheada
+@st.cache_data(ttl=600, show_spinner=False)
+def fetch_ativos(api_url: str):
+    r = requests.get(f"{api_url}/api/ativos", timeout=12)
+    r.raise_for_status()
+    return r.json().get("ativos", [])
+
+# Série de fechamento por ativo no intervalo (cacheada)
+@st.cache_data(ttl=180, show_spinner=False)
+def fetch_fechamento(api_url: str, inicio: str, fim: str, ativo: str):
+    url = f"{api_url}/api/ativos/intervalo?inicio={inicio}&fim={fim}&ativo={ativo}"
+    r = requests.get(url, timeout=20)
+    if r.status_code == 404:
+        return {"status": 404}
+    r.raise_for_status()
+    return r.json()
+
+import plotly.graph_objects as go
+
 # Configuração da página
 st.set_page_config(
     page_title="B3 Cotações - Análise de Mercado",
@@ -34,18 +71,16 @@ opcao = st.sidebar.radio(
 if opcao == "📅 Cotações do Dia":
     st.header("📅 Cotações do Dia")
 
-    # Carrega datas disponíveis
+    # Carrega datas disponíveis (cacheado)
     datas_disponiveis = []
     try:
-        resp_datas = requests.get(f"{API_URL}/api/cotacoes/datas", timeout=20)
-        if resp_datas.status_code == 200:
-            payload = resp_datas.json()
-            # Lista de strings ISO das datas
-            datas_disponiveis = [str(item["data"]) for item in payload.get("datas", [])]
-        elif resp_datas.status_code == 404:
+        payload = fetch_datas(API_URL)
+        datas_disponiveis = [str(item["data"]) for item in payload.get("datas", [])]
+    except requests.exceptions.HTTPError as e:
+        if getattr(e.response, "status_code", None) == 404:
             st.warning("Nenhuma data disponível encontrada na API.")
         else:
-            st.error(f"Erro carregando datas: {resp_datas.status_code}")
+            st.error(f"Erro carregando datas: {getattr(e.response, 'status_code', 'desconhecido')}")
     except requests.exceptions.ConnectionError:
         st.error("❌ Não foi possível conectar à API para listar as datas.")
     except Exception as e:
@@ -248,28 +283,33 @@ elif opcao == "📈 Ativos Disponíveis":
 
 # Ativos por intervalo de datas
 elif opcao == "🗓️ Ativos por Intervalo":
-    st.header("🗓️ Ativos por Intervalo de Datas")
+    st.header("🗓️ Série de Fechamento por Intervalo")
 
-    # Carrega datas disponíveis para limitar o range
+    # Carrega datas disponíveis (cacheado)
     datas_disponiveis = []
     try:
-        resp_datas = requests.get(f"{API_URL}/api/cotacoes/datas", timeout=20)
-        if resp_datas.status_code == 200:
-            payload = resp_datas.json()
-            datas_disponiveis = [str(item["data"]) for item in payload.get("datas", [])]
-        elif resp_datas.status_code == 404:
+        payload = fetch_datas(API_URL)
+        datas_disponiveis = [str(item["data"]) for item in payload.get("datas", [])]
+    except requests.exceptions.HTTPError as e:
+        if getattr(e.response, "status_code", None) == 404:
             st.warning("Nenhuma data disponível encontrada na API.")
         else:
-            st.error(f"Erro carregando datas: {resp_datas.status_code}")
+            st.error(f"Erro carregando datas: {getattr(e.response, 'status_code', 'desconhecido')}")
     except Exception as e:
         st.error(f"Erro ao carregar datas: {e}")
 
     if not datas_disponiveis:
         st.info("Carregue dados primeiro para habilitar essa consulta.")
     else:
-        col1, col2 = st.columns(2)
+        # Carrega ativos (cacheado)
+        try:
+            ativos = fetch_ativos(API_URL)
+        except Exception:
+            ativos = []
+
+        col1, col2, col3 = st.columns(3)
         with col1:
-            idx_inicio = max(len(datas_disponiveis) - 5, 0)
+            idx_inicio = max(len(datas_disponiveis) - 30, 0)
             data_inicio = st.selectbox(
                 "Data inicial:", options=datas_disponiveis, index=idx_inicio
             )
@@ -277,44 +317,70 @@ elif opcao == "🗓️ Ativos por Intervalo":
             data_fim = st.selectbox(
                 "Data final:", options=datas_disponiveis, index=len(datas_disponiveis) - 1
             )
+        with col3:
+            ativo_sel = st.selectbox(
+                "Ativo:", options=ativos if ativos else [""], index=0
+            )
 
         if data_fim < data_inicio:
             st.warning("A data final deve ser maior ou igual à inicial.")
+        elif not ativo_sel:
+            st.warning("Selecione um ativo para continuar.")
         else:
-            if st.button("Buscar Ativos", type="primary"):
-                with st.spinner("Consultando ativos no intervalo..."):
+            if st.button("Buscar Fechamento", type="primary"):
+                with st.spinner("Consultando série de fechamento..."):
                     try:
-                        url = f"{API_URL}/api/ativos/intervalo?inicio={data_inicio}&fim={data_fim}"
-                        r = requests.get(url, timeout=60)
-                        if r.status_code == 200:
-                            payload = r.json()
+                        payload = fetch_fechamento(API_URL, data_inicio, data_fim, ativo_sel)
+                        if isinstance(payload, dict) and payload.get("status") == 404:
+                            st.warning("Nenhum dado encontrado para o ativo/período informado.")
+                        else:
+                            # Métricas
+                            colm1, colm2, colm3 = st.columns(3)
+                            colm1.metric("Ativo", payload.get("ativo", ativo_sel))
+                            colm2.metric("Início", payload.get("inicio", data_inicio))
+                            colm3.metric("Fim", payload.get("fim", data_fim))
 
-                            col1, col2, col3 = st.columns(3)
-                            col1.metric("Ativos distintos", payload.get("total_ativos", 0))
-                            col2.metric("Registros no intervalo", payload.get("total_registros", 0))
-                            col3.markdown(
-                                f"<div style='font-size:0.9rem; color:gray; line-height:1.2'><b>Período</b><br>{payload.get('inicio')} → {payload.get('fim')}</div>",
-                                unsafe_allow_html=True
-                            )
+                            serie = payload.get("serie", [])
+                            if serie:
+                                df = pd.DataFrame(serie)
+                                df["data"] = pd.to_datetime(df["data"])  # para eixo do tempo
 
-                            dados = payload.get("ativos", [])
-                            if dados:
-                                df = pd.DataFrame(dados)
-                                df = df.rename(columns={"ativo": "Ativo", "total": "Qtde Registros"})
-                                df = df.sort_values("Qtde Registros", ascending=False)
-                                st.dataframe(df, use_container_width=True, height=420)
+                                # Gráfico de linha com marcadores
+                                fig = go.Figure(
+                                    data=[
+                                        go.Scatter(
+                                            x=df["data"],
+                                            y=df["fechamento"],
+                                            mode="lines+markers",
+                                            name="Fechamento",
+                                            line=dict(color="#1f77b4", width=2),
+                                            marker=dict(size=5),
+                                            hovertemplate="Data: %{x|%Y-%m-%d}<br>Fechamento: R$ %{y:.2f}<extra></extra>",
+                                        )
+                                    ]
+                                )
+                                fig.update_layout(
+                                    margin=dict(l=0, r=0, t=10, b=0),
+                                    height=420,
+                                    xaxis_title="Data",
+                                    yaxis_title="Preço de Fechamento (R$)",
+                                    xaxis=dict(showgrid=True, gridcolor="rgba(0,0,0,0.08)", tickangle=-30),
+                                    yaxis=dict(showgrid=True, gridcolor="rgba(0,0,0,0.08)", zeroline=False),
+                                )
+                                st.plotly_chart(fig, use_container_width=True, theme="streamlit")
 
-                                csv = df.to_csv(index=False).encode("utf-8")
+                                # Tabela e CSV
+                                df_out = df.copy()
+                                df_out["data"] = df_out["data"].dt.date
+                                st.dataframe(df_out.rename(columns={"data": "Data", "fechamento": "Fechamento"}), use_container_width=True, height=360)
+
+                                csv = df_out.rename(columns={"data": "Data", "fechamento": "Fechamento"}).to_csv(index=False).encode("utf-8")
                                 st.download_button(
                                     label="📥 Baixar CSV",
                                     data=csv,
-                                    file_name=f"ativos_intervalo_{data_inicio}_a_{data_fim}.csv",
+                                    file_name=f"fechamento_{ativo_sel}_{data_inicio}_a_{data_fim}.csv",
                                     mime="text/csv"
                                 )
-                        elif r.status_code == 404:
-                            st.warning("Nenhum ativo encontrado no intervalo informado.")
-                        else:
-                            st.error(f"Erro da API: {r.status_code}")
                     except requests.exceptions.ConnectionError:
                         st.error("❌ Não foi possível conectar à API.")
                     except Exception as e:

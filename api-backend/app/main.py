@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 from datetime import date
 from dotenv import load_dotenv
+from starlette.middleware.gzip import GZipMiddleware
 
 from app.database import get_db
 from app.models import Cotacao
@@ -26,6 +27,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Compressão GZIP para reduzir payloads em respostas maiores
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 @app.get("/api/cotacoes/datas")
 def listar_datas_disponiveis():
@@ -261,39 +265,42 @@ def listar_cotacoes_por_data(data: date):
 @app.get("/api/ativos/intervalo")
 def listar_ativos_por_intervalo(
     inicio: date = Query(..., description="Data inicial (YYYY-MM-DD)"),
-    fim: date = Query(..., description="Data final (YYYY-MM-DD)")
+    fim: date = Query(..., description="Data final (YYYY-MM-DD)"),
+    ativo: str = Query(..., description="Código do ativo (ex: PETR4)")
 ):
-    """Ativos com contagem entre duas datas (inclusive)."""
+    """Fechamento diário do ativo entre duas datas (inclusive)."""
     try:
         if fim < inicio:
             raise HTTPException(status_code=400, detail="A data final deve ser maior ou igual à inicial")
 
+        ativo_up = ativo.upper()
+
         query = """
-            SELECT ativo, COUNT(*) AS total
+            SELECT data_pregao::date AS data, fechamento
             FROM cotacoes
             WHERE data_pregao BETWEEN %s AND %s
-            GROUP BY ativo
-            ORDER BY total DESC, ativo ASC
+              AND ativo = %s
+            ORDER BY data_pregao ASC
         """
 
         with get_db() as conn:
             with conn.cursor() as cur:
-                cur.execute(query, (inicio, fim))
+                cur.execute(query, (inicio, fim, ativo_up))
                 rows = cur.fetchall()
 
                 if not rows:
-                    raise HTTPException(status_code=404, detail="Nenhum ativo encontrado no intervalo informado")
+                    raise HTTPException(status_code=404, detail=f"Nenhum registro encontrado para {ativo_up} no intervalo informado")
 
-                ativos = [
-                    {"ativo": r[0], "total": r[1]} for r in rows
+                serie = [
+                    {"data": str(r[0]), "fechamento": float(r[1])}
+                    for r in rows
                 ]
 
                 return {
                     "inicio": str(inicio),
                     "fim": str(fim),
-                    "total_ativos": len(ativos),
-                    "total_registros": int(sum(r[1] for r in rows)),
-                    "ativos": ativos
+                    "ativo": ativo_up,
+                    "serie": serie
                 }
 
     except HTTPException:
