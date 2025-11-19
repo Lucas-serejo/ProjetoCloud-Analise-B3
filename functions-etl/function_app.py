@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.INFO)
 app = func.FunctionApp()
 
 # Timer Trigger: baixa ZIP do dia útil e envia XMLs ao Blob
-@app.timer_trigger(schedule="0 0 1 * * 2-6", arg_name="mytimer", run_on_startup=False,
+@app.timer_trigger(schedule="0 0 2 * * 1-5", arg_name="mytimer", run_on_startup=False,
                    use_monitor=True)
 def ExtractorTimer(mytimer: func.TimerRequest) -> None:
     """Baixa ZIP da B3 e envia XMLs ao Blob."""
